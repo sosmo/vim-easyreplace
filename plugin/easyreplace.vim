@@ -5,7 +5,7 @@
 "
 "### Usage
 "
-"Type `:s/foo/bar` like you normally would to substitute "foo" with "bar". Then press the initiate key set by this plugin (`ctrl-enter` if you run Vim with a GUI, otherwise `ctrl-b` for the command line and `ctrl-g` for the command window). You'll be put back to normal mode on the next match. Then press `ctrl-n` to replace the match in normal mode, or press `n` to skip results as you normally would.
+"Type `:s/foo/bar` like you normally would to substitute "foo" with "bar". Then press the initiate key set by this plugin (`ctrl-enter` if you run Vim with a GUI, otherwise `ctrl-g` for the command line and `ctrl-b` for the command window). You'll be put back to normal mode on the next match. Then press `ctrl-n` to replace the match in normal mode, or press `n` to skip results as you normally would.
 "
 "Press `cpr` (mnemonic: toggle previous replace) in normal mode to make easyreplace always replace the latest search result with your latest substitution.
 "
