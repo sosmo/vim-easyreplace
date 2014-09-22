@@ -30,31 +30,21 @@ Use your favorite plugin manager, or just paste the files in your vim folder
 
 ### Configuration
 
-    :let g:erepl_after_initiate = "zz"
+`:let g:erepl_after_initiate = "zz"` Replace the "zz" to issue any normal mode commands to executue after you've entered a regex. NOTE: special characters (such as "<esc>") and """ must be escaped with "\"
 
-Replace the "zz" to issue any normal mode commands to executue after you've entered a regex. NOTE: special characters (such as "<esc>") and """ must be escaped with "\"
-
-    `:let g:erepl_after_replace = "zz"`
-
-Same as g:erepl_after_initiate, except this gets executed after each substitution
+`:let g:erepl_after_replace = "zz"` Same as g:erepl_after_initiate, except this gets executed after each substitution
 
 **Available mappings:**
 
-    `<Plug>EasyReplaceInitiate`
-
-Map this to what you want to press in command line or cmdwindow to start the substitution.
+`<Plug>EasyReplaceInitiate` Map this to what you want to press in command line or cmdwindow to start the substitution.
 
 example: `:cmap <c-x> <Plug>EasyReplaceInitiate`
 
-    `<Plug>EasyReplaceDo`
-
-Map this to what you want to press in normal mode to substitute the current match.
+`<Plug>EasyReplaceDo` Map this to what you want to press in normal mode to substitute the current match.
 
 example: `:nmap <c-x> <Plug>EasyReplaceDo`
 
-    `<Plug>EasyReplaceToggleUsePrevious`
-
-Make easyreplace always replace the latest search result with your latest substitution.
+`<Plug>EasyReplaceToggleUsePrevious` Make easyreplace always replace the latest search result with your latest substitution.
 
 example: `:nmap cpr <Plug>EasyReplaceToggleUsePrevious`
 
