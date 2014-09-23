@@ -283,18 +283,19 @@ fun! easyreplace#EasyReplaceDo()
 
 		endif
 
-		" these should technically go to feedkeys, now they aren't always shown
 		let found = s:FindNext(getpos("."), 1, user_wrapscan)
-		if found > 0
-			echo "/" . strpart(s:search_str, 0, msg_len)
-		else
-			echo "No more matches: " . strpart(s:search_str, 0, msg_len)
-		endif
 
 		let s:next_pos = getpos(".")
 
 		let cycles += 1
 	endwhile
+
+	" these should technically go to feedkeys, now they aren't always shown
+	if found > 0
+		echo "/" . strpart(s:search_str, 0, msg_len)
+	else
+		echo "No more matches: " . strpart(s:search_str, 0, msg_len)
+	endif
 
 	let &virtualedit = user_virtualedit
 
