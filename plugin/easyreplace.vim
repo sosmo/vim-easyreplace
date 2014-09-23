@@ -77,9 +77,9 @@ inoremap <silent> <Plug>EasyReplaceInitiate <c-c><c-c>:call easyreplace#EasyRepl
 nnoremap <silent> <Plug>EasyReplaceInitiate <c-c><c-c>:call easyreplace#EasyReplaceInitiate(histget(":", -1))<cr>
 cnoremap <silent> <Plug>EasyReplaceInitiate <c-c>:call easyreplace#EasyReplaceInitiate(histget(":", -1))<cr>
 
-nnoremap <silent> <Plug>EasyReplaceDo <esc>:<c-u>call easyreplace#EasyReplaceDo()<cr>
+nnoremap <silent> <Plug>EasyReplaceDo :<c-u>call easyreplace#EasyReplaceDo()<cr>
 
-nnoremap <silent> <Plug>EasyReplaceToggleUsePrevious <esc>:<c-u>call easyreplace#EasyReplaceToggleUsePrevious()<cr>
+nnoremap <silent> <Plug>EasyReplaceToggleUsePrevious :<c-u>call easyreplace#EasyReplaceToggleUsePrevious()<cr>
 
 
 " <c-cr> doesn't work for most terminals.

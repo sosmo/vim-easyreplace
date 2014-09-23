@@ -8,6 +8,32 @@ let s:end_paren = "\\)"
 let s:next_pos = [0, 0, 0, 0]
 
 
+" pretty unnecessary, but fun
+fun! s:FindSeparator(subst_cmd)
+	let separator_i = -1
+	let cont = 1
+	" note that multi-byte chars make this too big
+	let len = strlen(a:subst_cmd)
+	let i = 0
+	while i < len && cont
+		if strpart(a:subst_cmd, i, 1) ==# 's'
+			let separator_i = match(a:subst_cmd, '\C\v(su{0,1}b{0,1}s{0,1}t{0,1}i{0,1}t{0,1}u{0,1}t{0,1}e{0,1} *)@<=[^0-9A-Za-z_ ]', i)
+			let cont = 0
+		elseif strpart(a:subst_cmd, i, 1) ==# "'"
+			let i += 2
+		elseif strpart(a:subst_cmd, i, 1) ==# '/'
+			let i = match(a:subst_cmd, '\v\\@<!(\\\\)*\zs/', i+1)
+			if i < 0
+				let cont = 0
+			endif
+			let i+= 1
+		else
+			let i += 1
+		endif
+	endwhile
+	return separator_i
+endfun
+
 fun! s:DefineFlags(flags_string)
 	let s:flags = a:flags_string
 	" remove possible "c" flag
@@ -194,74 +220,81 @@ fun! easyreplace#EasyReplaceDo()
 
 	let msg_len = float2nr(winwidth(0) / 1.5) - 17
 
-	if s:use_prev
-		let s:sep = "/"
-		let s:flags = "&"
-		let s:replace_str = "~"
-		if s:search_str != @/
-			let s:search_str = @/
-			let s:prev_pos = [0, 0, 0, 0]
-			call s:DefineParen()
-		endif
-	else
-		if s:search_str ==# ""
-			return
-		endif
-		let @/ = s:search_str
-	endif
+	let cycles = 0
+	let times = v:count1
+	while cycles < times
 
-	set whichwrap+=l
-	set virtualedit=onemore
-
-	let curr_pos = getpos(".")
-	" if the cursor is where the previous substitution left it, operate strictly. trying to emulate CursorMoved autocmd, obviously works differently when moving around and returning back, but that might not be bad at all
-	if s:FindNext(curr_pos, curr_pos == s:next_pos, user_wrapscan) == 1
-
-		let user_reg = getreg('"')
-		let user_reg_type = getregtype('"')
-		exe "normal! gvy\<esc>"
-		let match = @"
-		call setreg(@", user_reg, user_reg_type)
-		" mark the first char of the next result so that the whole result (and not others, so no need to worry about the 'g' flag) is affected by \%V. \%'< would really do the same thing but this seems neater and works for sure
-		normal! m<m>
-		let original_line = line(".")
-		let original_col = virtcol(".")
-
-		let match_len = strlen(substitute(match, ".", "x", "g"))
-		"echo "@\"".match
-		let match_height = s:SubStrCount(match, '\n', match_len) + 1
-		"echo "match_len".match_len
-		"echo "match_height".match_height
-
-		let end_line = original_line + match_height - 1
-		let chars_before = s:CountChars(original_line, end_line)
-		"echo "chars_before" . chars_before
-
-		exe "keepj '<,'>s" . s:sep . "\\%V\\%(" . s:search_str . s:end_paren . s:sep . s:replace_str . s:sep . s:flags
-
-		let chars_after = s:CountChars(original_line, line("."))
-		"echo "chars_after" . chars_after
-		let offset = match_len + (chars_after - chars_before)
-		"echo "offset" . offset
-		keepj exe 'normal! `<'
-		if offset > 0
-			exe 'normal! ' . offset . 'l'
+		if s:use_prev
+			let s:sep = "/"
+			let s:flags = "&"
+			let s:replace_str = "~"
+			if s:search_str != @/
+				let s:search_str = @/
+				let s:prev_pos = [0, 0, 0, 0]
+				call s:DefineParen()
+			endif
+		else
+			if s:search_str ==# ""
+				return
+			endif
+			let @/ = s:search_str
 		endif
 
-		call histdel("/", -1)
-		let @/ = s:search_str
+		set whichwrap+=l
+		set virtualedit=onemore
 
-	endif
+		let curr_pos = getpos(".")
+		" if the cursor is where the previous substitution left it, operate strictly. trying to emulate CursorMoved autocmd, obviously works differently when moving around and returning back, but that might not be bad at all
+		if s:FindNext(curr_pos, curr_pos == s:next_pos, user_wrapscan) == 1
 
-	" these should technically go to feedkeys, now they aren't always shown
-	let found = s:FindNext(getpos("."), 1, user_wrapscan)
-	if found > 0
-		echo "/" . strpart(s:search_str, 0, msg_len)
-	else
-		echo "No more matches: " . strpart(s:search_str, 0, msg_len)
-	endif
+			let user_reg = getreg('"')
+			let user_reg_type = getregtype('"')
+			exe "normal! gvy\<esc>"
+			let match = @"
+			call setreg(@", user_reg, user_reg_type)
+			" mark the first char of the next result so that the whole result (and not others, so no need to worry about the 'g' flag) is affected by \%V. \%'< would really do the same thing but this seems neater and works for sure
+			normal! m<m>
+			let original_line = line(".")
+			let original_col = virtcol(".")
 
-	let s:next_pos = getpos(".")
+			let match_len = strlen(substitute(match, ".", "x", "g"))
+			"echo "@\"".match
+			let match_height = s:SubStrCount(match, '\n', match_len) + 1
+			"echo "match_len".match_len
+			"echo "match_height".match_height
+
+			let end_line = original_line + match_height - 1
+			let chars_before = s:CountChars(original_line, end_line)
+			"echo "chars_before" . chars_before
+
+			exe "keepj '<,'>s" . s:sep . "\\%V\\%(" . s:search_str . s:end_paren . s:sep . s:replace_str . s:sep . s:flags
+
+			let chars_after = s:CountChars(original_line, line("."))
+			"echo "chars_after" . chars_after
+			let offset = match_len + (chars_after - chars_before)
+			"echo "offset" . offset
+			keepj exe 'normal! `<'
+			if offset > 0
+				exe 'normal! ' . offset . 'l'
+			endif
+
+			call histdel("/", -1)
+			let @/ = s:search_str
+
+		endif
+
+		" these should technically go to feedkeys, now they aren't always shown
+		let found = s:FindNext(getpos("."), 1, user_wrapscan)
+		if found > 0
+			echo "/" . strpart(s:search_str, 0, msg_len)
+		else
+			echo "No more matches: " . strpart(s:search_str, 0, msg_len)
+		endif
+
+		let s:next_pos = getpos(".")
+
+		let cycles += 1
+	endwhile
 
 	let &virtualedit = user_virtualedit
 
