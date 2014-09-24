@@ -20,7 +20,7 @@ Press `cpr` (mnemonic: toggle previous replace) in normal mode to make easyrepla
 
 NOTE: If you are sure you'll never have multiple matches on one line (or you don't mind always replacing all of them at the same time), this built-in solution is probably better for you:
 
-    nnoremap <c-n> <esc>:&&<cr>jgn<esc>`<
+    nnoremap <c-n> :&&<cr>j0gn<esc>`<
 
 The built-in solution doesn't move to the next match automatically if you search for something else after starting the substitution. If you consider this a problem you may still want to use this plugin despite the added complexity and the couple of quirks
 
