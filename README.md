@@ -50,8 +50,7 @@ example: `:nmap cpr <Plug>EasyReplaceToggleUsePrevious`
 * Really long / complex searches might not work. The gn function used by this plugin tends to sometimes select only the first char on those, and these situations are where the plugin also fails.
 * Searches containing only one char might not work. gn sometimes fails to keep the cursor still when the match is only 1 char long and you're on it. gn might even skip these matches altogether.
 * \zs and \ze don't work in the search pattern (way too big of a hassle to get them right). \@<= and \@= still work normally so they should offer a rather painless workaround.
-* Jump history could be left tidier, currently there's at least one extra mark left with each substitution.
-* Doesn't "bump up" search/cmd history items (if needed) after replaces, only after initiatiolizations.
+* Doesn't "bump up" search/cmd history items (if needed) after replaces, only after initializations.
 
 
 ### License
