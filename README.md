@@ -5,18 +5,12 @@ Replace the substitute mode launched with the `c` flag (as in `:s/foo/bar/c`) wi
 
 ### Usage
 
-Type `:s/foo/bar` like you normally would to substitute "foo" with "bar". Then press the initiate key set by this plugin (`ctrl-enter` if you run Vim with a GUI, otherwise `ctrl-g` for the command line and `ctrl-b` for the command window). You'll be put back to normal mode on the next match. Then press `ctrl-n` to replace the match in normal mode, or press `n` to skip results as you normally would.
+Type `:s/foo/bar` like you normally would to substitute "foo" with "bar". Then press the initiate key set by this plugin (`ctrl-enter` if you run Vim with a GUI, otherwise `ctrl-g` for the command line and `ctrl-b` for the command window). You'll be put back to normal mode on the next match of `foo`. Now you can press `ctrl-n` in normal mode replace the closest `foo` with `bar` (and move to the next `foo` if possible). Or, unlike with `:s/foo/bar/c`, you can do any normal mode stuff you feel like doing. Use `n` to skip results between `c-n`s as you normally would.
 
 You can prefix the `ctrl-n` command with a count to replace the next *n* matches at once.
 
-Press `cpr` (mnemonic: toggle previous replace) in normal mode to make easyreplace always replace the latest search result with your latest substitution.
+Press `cpr` (mnemonic: change previous replace) in normal mode to make easyreplace always replace the latest search result with your latest substitution.
 
-
-### Use cases
-
-1. You can't create a regex that only matches wanted items, or aren't sure there won't be any unwanted matches
-2. You don't know beforehand the exact area where you want to substitute (so you can't use visual mode to limit the area of the operation) or just don't want to select it with visual mode (if it's big for example)
-3. You want to keep quick substitutions simple and graphic
 
 NOTE: If you are sure you'll never have multiple matches on one line (or you don't mind always replacing all of them at the same time), this built-in solution is probably better for you:
 
