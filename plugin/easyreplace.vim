@@ -7,8 +7,6 @@
 "
 "Type `:s/foo/bar` like you normally would to substitute "foo" with "bar". Then press the initiate key set by this plugin (`ctrl-enter` if you run Vim with a GUI, otherwise `ctrl-g` for the command line and `ctrl-b` for the command window). You'll be put back to normal mode on the next match. Then press `ctrl-n` to replace the match in normal mode, or press `n` to skip results as you normally would.
 "
-"You can prefix the `ctrl-n` command with a count to replace the next *n* matches at once.
-"
 "Press `cpr` (mnemonic: toggle previous replace) in normal mode to make easyreplace always replace the latest search result with your latest substitution.
 "
 "
@@ -20,7 +18,7 @@
 "
 "NOTE: If you are sure you'll never have multiple matches on one line (or you don't mind always replacing all of them at the same time), this built-in solution is probably better for you:
 "
-"    nnoremap <c-n> :&&<cr>j0gn<esc>`<
+"    nnoremap <c-n> <esc>:&&<cr>jgn<esc>`<
 "
 "The built-in solution doesn't move to the next match automatically if you search for something else after starting the substitution. If you consider this a problem you may still want to use this plugin despite the added complexity and the couple of quirks
 "

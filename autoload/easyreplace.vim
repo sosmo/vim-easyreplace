@@ -1,6 +1,7 @@
 let s:use_prev = 0
 let s:sep = "/"
 let s:search_str = ""
+let s:match_str = ""
 let s:replace_str = ""
 let s:flags = ""
 let s:end_paren = "\\)"
@@ -107,7 +108,7 @@ fun! s:FindNext(start, strict, wrap)
 	if !a:strict || (line(".") == 1 && virtcol(".") == 1)
 		delmarks <>
 
-		let @/ = s:search_str
+		let @/ = s:match_str
 		exe "normal! gn\<esc>"
 
 		if line("'<") == 0
@@ -133,14 +134,14 @@ fun! s:FindNext(start, strict, wrap)
 		let before_search = getpos(".")
 
 		" watch out, using silent instead of exe might break moving to the next match
-		keepj exe "normal! /\\%V\\(" . s:search_str . s:end_paren . "\<cr>\<esc>"
+		keepj exe "normal! /\\%V\\(" . s:match_str . s:end_paren . "\<cr>\<esc>"
 		" get the boundaries for the current match
 		" gn sometimes fails to keep the cursor still when the match is only 1 char long and you're on it. most notably when the match is 1 char long and on the last col of a line. sometimes gn only selects the first char when the search string is complex. this may break the whole substitution at worst
 		exe "normal! gn\<esc>"
 
 		" doesn't remove the existing entry if the user at some point happened to search for the exact same string as above. cool. probably thanks to :h function-search-undo?
 		call histdel("/", -1)
-		let @/ = s:search_str
+		let @/ = s:match_str
 
 		if a:wrap && getpos(".") == before_search
 			let &wrapscan = 1
@@ -174,12 +175,16 @@ fun! easyreplace#EasyReplaceInitiate(init_cmd)
 		return
 	endif
 	let s:sep = strpart(a:init_cmd, separator_i, 1)
-	" escape the separator for the split regex if necessary
-	let sep_esc = escape(s:sep, '/.*$^')
+	" escape the separator for the split regex if necessary (if it's a special char with verymagic)
+	let sep_esc = escape(s:sep, '/.*$^@+')
+
 	let substrings = split(strpart(a:init_cmd, separator_i+1), '\C\v\\@<!(\\\\)*\zs'.sep_esc, 1)
+
 	let s:search_str = substrings[0]
+	let empty = 0
 	if s:search_str ==# ""
 		let s:search_str = @/
+		let empty = 1
 	endif
 	let s:replace_str = get(substrings, 1, "")
 	" if the last group (flags) is present in the substitute operation
@@ -193,14 +198,25 @@ fun! easyreplace#EasyReplaceInitiate(init_cmd)
 	if s:IsVeryMagic(s:search_str)
 		let s:end_paren = ")"
 	endif
+
+	" this is the only use for separating the match used for finding the next hit and the search used in the actual substitution. the match string is different only in that it has slashes escaped (search always requires that whether the substitution was given with "non-slash" delimiters or not). ONLY escape slashes if the delimiter used by the user was not a slash (in which case they have it manually escaped already) AND the used search string isn't empty (in which case vim will treat custom delimiters the same as slashes and thus require the slashes in the previous search string to be escaped already)
+	let s:match_str = s:search_str
+	if s:sep !~# '/'
+		if !empty
+			let s:match_str = escape(s:match_str, '/')
+		endif
+		" if a custom delimiter was used, we need to remove possible inputted extra escapes from the match string
+		let s:match_str = substitute(s:match_str, '\C\v\\@<!(\\\\)*\zs\\'.sep_esc, s:sep, "g")
+	endif
+
 	"echo 'end_paren: '.s:end_paren
-	let s:search_str = s:search_str
-	let @/ = s:search_str
+	let @/ = s:match_str
 	let s:prev_pos = [0, 0, 0, 0]
 
 	" the marks get changed at feedkeys anyway, so this doesn't really help. not a biggie though, not worth putting to feedkeys
 	call setpos("'<", original_left)
 	call setpos("'>", original_right)
+	"let g:a= [s:match_str, s:search_str, s:replace_str]
 
 	" ugly ahead: add search to the history, trigger highlighting if hlsearch is on, and move to the closest occurrence
 	" histadd can cause duplicate entries, this should have no side effects
@@ -228,16 +244,17 @@ fun! easyreplace#EasyReplaceDo()
 			let s:sep = "/"
 			let s:flags = "&"
 			let s:replace_str = "~"
-			if s:search_str != @/
-				let s:search_str = @/
+			if s:match_str != @/
+				let s:match_str = @/
 				let s:prev_pos = [0, 0, 0, 0]
 				call s:DefineParen()
 			endif
+			let s:search_str = s:match_str
 		else
-			if s:search_str ==# ""
+			if s:match_str ==# ""
 				return
 			endif
-			let @/ = s:search_str
+			let @/ = s:match_str
 		endif
 
 		set whichwrap+=l
@@ -251,7 +268,7 @@ fun! easyreplace#EasyReplaceDo()
 			let user_reg_type = getregtype('"')
 			exe "normal! gvy\<esc>"
 			let match = @"
-			call setreg(@", user_reg, user_reg_type)
+			call setreg('"', user_reg, user_reg_type)
 			" mark the first char of the next result so that the whole result (and not others, so no need to worry about the 'g' flag) is affected by \%V. \%'< would really do the same thing but this seems neater and works for sure
 			normal! m<m>
 			let original_line = line(".")
@@ -268,6 +285,7 @@ fun! easyreplace#EasyReplaceDo()
 			"echo "chars_before" . chars_before
 
 			exe "keepj '<,'>s" . s:sep . "\\%V\\%(" . s:search_str . s:end_paren . s:sep . s:replace_str . s:sep . s:flags
+			"let g:y= "'<,'>s" . s:sep . "\\%V\\%(" . s:search_str . s:end_paren . s:sep . s:replace_str . s:sep . s:flags
 
 			let chars_after = s:CountChars(original_line, line("."))
 			"echo "chars_after" . chars_after
@@ -279,7 +297,7 @@ fun! easyreplace#EasyReplaceDo()
 			endif
 
 			call histdel("/", -1)
-			let @/ = s:search_str
+			let @/ = s:match_str
 
 		endif
 
@@ -292,7 +310,7 @@ fun! easyreplace#EasyReplaceDo()
 
 	" these should technically go to feedkeys, now they aren't always shown
 	if found > 0
-		echo "/" . strpart(s:search_str, 0, msg_len)
+		echo "/" . strpart(s:match_str, 0, msg_len)
 	else
 		echo "No more matches: " . strpart(s:search_str, 0, msg_len)
 	endif
