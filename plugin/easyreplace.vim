@@ -70,6 +70,9 @@ endif
 if !exists("g:erepl_after_replace")
 	let g:erepl_after_replace = ""
 endif
+if !exists("g:erepl_always_verymagic")
+	let g:erepl_always_verymagic = 0
+endif
 
 
 " a bit ugly, but has to be mapped like this to escape cmd and record typed command to cmd history

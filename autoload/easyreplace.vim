@@ -51,7 +51,7 @@ fun! s:DefineFlags(flags_string)
 endfun
 
 fun! s:MatchBackwards(str, match)
-	" note that multi-byte chars make this too big
+	" note that multi-byte chars throw this off, doesn't matter here because the result is used as a byte-wise index
 	let i = strlen(a:str) - 1
 	let found = -1
 	while i >= 0 && found < 0
@@ -63,10 +63,15 @@ endf
 
 fun! s:IsVeryMagic(search_str)
 	let magic = ""
+	if g:erepl_always_verymagic && match(s:search_str, '\v^\\(v|m|V|M)') < 0
+		let search = '\v' . s:search_str
+	else
+		let search = s:search_str
+	endif
 	" get the last magic operator
-	let magic_i = s:MatchBackwards(a:search_str, '\C\v\\@<!(\\\\)*\zs\\(v|m|M|V)')
+	let magic_i = s:MatchBackwards(search, '\C\v\\@<!(\\\\)*\zs\\(v|m|M|V)')
 	if magic_i >= 0
-		let magic = strpart(a:search_str, magic_i, 2)
+		let magic = strpart(search, magic_i, 2)
 	endif
 	"" slow regex
 	"let magic = matchstr(s:search_str, '\v\C(\\@<!(\\\\)*\zs\\(v|m|M|V))@<!.*\\@<!(\\\\)*\zs\\(v|m|M|V)')
@@ -105,10 +110,16 @@ endfun
 fun! s:FindNext(start, strict, wrap)
 	let ret = 0
 
+	if g:erepl_always_verymagic && match(s:search_str, '\v^\\(v|m|V|M)') < 0
+		let search = '\v' . s:search_str
+	else
+		let search = s:search_str
+	endif
+
 	if !a:strict || (line(".") == 1 && virtcol(".") == 1)
 		delmarks <>
 
-		let @/ = s:match_str
+		let @/ = search
 		exe "normal! gn\<esc>"
 
 		if line("'<") == 0
@@ -134,14 +145,15 @@ fun! s:FindNext(start, strict, wrap)
 		let before_search = getpos(".")
 
 		" watch out, using silent instead of exe might break moving to the next match
-		keepj exe "normal! /\\%V\\(" . s:match_str . s:end_paren . "\<cr>\<esc>"
+		keepj exe "normal! /\\%V\\(" . search . s:end_paren . "\<cr>\<esc>"
 		" get the boundaries for the current match
 		" gn sometimes fails to keep the cursor still when the match is only 1 char long and you're on it. most notably when the match is 1 char long and on the last col of a line. sometimes gn only selects the first char when the search string is complex. this may break the whole substitution at worst
 		exe "normal! gn\<esc>"
 
 		" doesn't remove the existing entry if the user at some point happened to search for the exact same string as above. cool. probably thanks to :h function-search-undo?
 		call histdel("/", -1)
-		let @/ = s:match_str
+		"let @/ = s:match_str
+		let @/ = search
 
 		if a:wrap && getpos(".") == before_search
 			let &wrapscan = 1
@@ -211,6 +223,9 @@ fun! easyreplace#EasyReplaceInitiate(init_cmd)
 
 	"echo 'end_paren: '.s:end_paren
 	let @/ = s:match_str
+	if g:erepl_always_verymagic && match(s:search_str, '\v^\\(v|m|V|M)') < 0
+		let @/ = '\v' . s:match_str
+	endif
 	let s:prev_pos = [0, 0, 0, 0]
 
 	" the marks get changed at feedkeys anyway, so this doesn't really help. not a biggie though, not worth putting to feedkeys
@@ -284,8 +299,14 @@ fun! easyreplace#EasyReplaceDo()
 			let chars_before = s:CountChars(original_line, end_line)
 			"echo "chars_before" . chars_before
 
-			exe "keepj '<,'>s" . s:sep . "\\%V\\%(" . s:search_str . s:end_paren . s:sep . s:replace_str . s:sep . s:flags
-			"let g:y= "'<,'>s" . s:sep . "\\%V\\%(" . s:search_str . s:end_paren . s:sep . s:replace_str . s:sep . s:flags
+			if g:erepl_always_verymagic && match(s:search_str, '\v^\\(v|m|V|M)') < 0
+				let replace = '\v' . s:search_str
+			else
+				let replace = s:search_str
+			endif
+
+			exe "keepj '<,'>s" . s:sep . "\\%V\\%(" . replace . s:end_paren . s:sep . s:replace_str . s:sep . s:flags
+			"let g:y= "'<,'>s" . s:sep . "\\%V\\%(" . replace . s:end_paren . s:sep . s:replace_str . s:sep . s:flags
 
 			let chars_after = s:CountChars(original_line, line("."))
 			"echo "chars_after" . chars_after
@@ -297,7 +318,11 @@ fun! easyreplace#EasyReplaceDo()
 			endif
 
 			call histdel("/", -1)
-			let @/ = s:match_str
+			"" not needed as FindNext already sets the search
+			"let @/ = s:match_str
+			"if g:erepl_always_verymagic
+				"let @/ = '\v' . s:match_str
+			"endif
 
 		endif
 
@@ -312,7 +337,7 @@ fun! easyreplace#EasyReplaceDo()
 	if found > 0
 		echo "/" . strpart(s:match_str, 0, msg_len)
 	else
-		echo "No more matches: " . strpart(s:search_str, 0, msg_len)
+		echo "No more matches: " . strpart(s:match_str, 0, msg_len)
 	endif
 
 	let &virtualedit = user_virtualedit
