@@ -1,9 +1,16 @@
+" Whether to use the latest search and latest substitution replacement (~) to find and replace when executing EasyReplaceDo
 let s:use_prev = 1
+" Separator used in substitution
 let s:sep = "/"
+" The string to be used in the replace operation
 let s:search_str = ""
+" The string to be used for finding matches. Unlike search_str, this can't have special delimiters so instead '/' will always be eascaped and custom delimiters will be de-escaped if they were given
 let s:match_str = ""
+" String to replace search_str with
 let s:replace_str = ""
+" Flags of the substitution
 let s:flags = ""
+" The whole search is enclosed in one set of parentheses, and depending of the magic type of the substitution, we either need to escape the latter paren or not
 let s:end_paren = "\\)"
 " last position where the cursor left off after the substitution operation
 let s:next_pos = [0, 0, 0, 0]
@@ -111,7 +118,7 @@ fun! s:FindNext(start, strict, wrap)
 	if !a:strict || (line(".") == 1 && virtcol(".") == 1)
 		delmarks <>
 
-		let @/ = s:search_str
+		let @/ = s:match_str
 		exe "normal! gn\<esc>"
 
 		if line("'<") == 0
@@ -137,15 +144,14 @@ fun! s:FindNext(start, strict, wrap)
 		let before_search = getpos(".")
 
 		" watch out, using silent instead of exe might break moving to the next match
-		keepj exe "normal! /\\%V\\(" . s:search_str . s:end_paren . "\<cr>\<esc>"
+		keepj exe "normal! /\\%V\\(" . s:match_str . s:end_paren . "\<cr>\<esc>"
 		" get the boundaries for the current match
 		" gn sometimes fails to keep the cursor still when the match is only 1 char long and you're on it. most notably when the match is 1 char long and on the last col of a line. sometimes gn only selects the first char when the search string is complex. this may break the whole substitution at worst
 		exe "normal! gn\<esc>"
 
 		" doesn't remove the existing entry if the user at some point happened to search for the exact same string as above. cool. probably thanks to :h function-search-undo?
 		call histdel("/", -1)
-		"let @/ = s:match_str
-		let @/ = s:search_str
+		let @/ = s:match_str
 
 		if getpos(".") == before_search && a:wrap
 			let &wrapscan = 1
@@ -339,5 +345,5 @@ fun! easyreplace#EasyReplaceDo()
 
 	call feedkeys(g:erepl_after_replace)
 	" clear up unnecessary error prompts caused by "not found" problems (which I can't get rid of because using silent to mute those seems to have weird side effects).
-	"call feedkeys("\<esc>", 'n')
+	call feedkeys("\<esc>", 'n')
 endfunction
