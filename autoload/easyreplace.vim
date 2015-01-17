@@ -1,4 +1,4 @@
-let s:use_prev = 0
+let s:use_prev = 1
 let s:sep = "/"
 let s:search_str = ""
 let s:match_str = ""
@@ -13,7 +13,7 @@ let s:next_pos = [0, 0, 0, 0]
 fun! s:FindSeparator(subst_cmd)
 	let separator_i = -1
 	let cont = 1
-	" note that multi-byte chars make this too big
+	" note that multi-byte chars throw this off, doesn't matter here because the result is used as a byte-wise index
 	let len = strlen(a:subst_cmd)
 	let i = 0
 	while i < len && cont
@@ -52,29 +52,27 @@ endfun
 
 fun! s:MatchBackwards(str, match)
 	" note that multi-byte chars throw this off, doesn't matter here because the result is used as a byte-wise index
-	let i = strlen(a:str) - 1
+	let i = 0
 	let found = -1
-	while i >= 0 && found < 0
-		let found = match(a:str, a:match, i)
-		let i -= 1
+	while i >= 0
+		let i = match(a:str, a:match, i)
+		if i >= 0
+			let found = i
+			let i += 1
+		endif
 	endwhile
 	return found
 endf
 
 fun! s:IsVeryMagic(search_str)
 	let magic = ""
-	if g:erepl_always_verymagic && match(s:search_str, '\v^\\(v|m|V|M)') < 0
-		let search = '\v' . s:search_str
-	else
-		let search = s:search_str
-	endif
 	" get the last magic operator
-	let magic_i = s:MatchBackwards(search, '\C\v\\@<!(\\\\)*\zs\\(v|m|M|V)')
+	let magic_i = s:MatchBackwards(a:search_str, '\C\v\\@<!(\\\\)*\zs\\(v|m|M|V)')
 	if magic_i >= 0
-		let magic = strpart(search, magic_i, 2)
+		let magic = strpart(a:search_str, magic_i, 2)
 	endif
 	"" slow regex
-	"let magic = matchstr(s:search_str, '\v\C(\\@<!(\\\\)*\zs\\(v|m|M|V))@<!.*\\@<!(\\\\)*\zs\\(v|m|M|V)')
+	"let magic = matchstr(a:search_str, '\v\C(\\@<!(\\\\)*\zs\\(v|m|M|V))@<!.*\\@<!(\\\\)*\zs\\(v|m|M|V)')
 	if magic ==# '\v'
 		return 1
 	endif
@@ -110,16 +108,10 @@ endfun
 fun! s:FindNext(start, strict, wrap)
 	let ret = 0
 
-	if g:erepl_always_verymagic && match(s:search_str, '\v^\\(v|m|V|M)') < 0
-		let search = '\v' . s:search_str
-	else
-		let search = s:search_str
-	endif
-
 	if !a:strict || (line(".") == 1 && virtcol(".") == 1)
 		delmarks <>
 
-		let @/ = search
+		let @/ = s:search_str
 		exe "normal! gn\<esc>"
 
 		if line("'<") == 0
@@ -145,7 +137,7 @@ fun! s:FindNext(start, strict, wrap)
 		let before_search = getpos(".")
 
 		" watch out, using silent instead of exe might break moving to the next match
-		keepj exe "normal! /\\%V\\(" . search . s:end_paren . "\<cr>\<esc>"
+		keepj exe "normal! /\\%V\\(" . s:search_str . s:end_paren . "\<cr>\<esc>"
 		" get the boundaries for the current match
 		" gn sometimes fails to keep the cursor still when the match is only 1 char long and you're on it. most notably when the match is 1 char long and on the last col of a line. sometimes gn only selects the first char when the search string is complex. this may break the whole substitution at worst
 		exe "normal! gn\<esc>"
@@ -153,16 +145,16 @@ fun! s:FindNext(start, strict, wrap)
 		" doesn't remove the existing entry if the user at some point happened to search for the exact same string as above. cool. probably thanks to :h function-search-undo?
 		call histdel("/", -1)
 		"let @/ = s:match_str
-		let @/ = search
+		let @/ = s:search_str
 
-		if a:wrap && getpos(".") == before_search
+		if getpos(".") == before_search && a:wrap
 			let &wrapscan = 1
 			keepj exe "norm! ngn\<esc>`<"
 			" note: this fails when the match is 1 char long, it's the only match in the buffer, and the function gets called after replacing the match with the exact same char - after a substitution the cursor will initially be to the right of the "new" match, so when we move it to the left on top of that match and wrap around with search, we'll not move at all even though a match was found
 			if getpos(".") != before_search
 				let ret = 2
 			endif
-		else
+		elseif a:wrap
 			let ret = 1
 		endif
 
@@ -180,6 +172,7 @@ fun! easyreplace#EasyReplaceInitiate(init_cmd)
 	let original_left = getpos("'<")
 	let original_right = getpos("'>")
 
+	" stop using latest substitution commands every time when explicitly initiated
 	let s:use_prev = 0
 
 	let separator_i = s:FindSeparator(a:init_cmd)
@@ -188,7 +181,7 @@ fun! easyreplace#EasyReplaceInitiate(init_cmd)
 	endif
 	let s:sep = strpart(a:init_cmd, separator_i, 1)
 	" escape the separator for the split regex if necessary (if it's a special char with verymagic)
-	let sep_esc = escape(s:sep, '/.*$^@+')
+	let sep_esc = escape(s:sep, '/.?=%@*+&<>()[]{}^$~|\')
 
 	let substrings = split(strpart(a:init_cmd, separator_i+1), '\C\v\\@<!(\\\\)*\zs'.sep_esc, 1)
 
@@ -205,13 +198,18 @@ fun! easyreplace#EasyReplaceInitiate(init_cmd)
 	else
 		let s:flags = "e"
 	endif
+
+	if g:erepl_always_verymagic && match(s:search_str, '\v^\\(v|m|V|M)') < 0
+		let s:search_str = '\v'. s:search_str
+	endif
+
 	let s:end_paren = "\\)"
 	" choose the later parenthesis (defined by the presence of \v) to surround all the search string. this way \%V will always be applied to the whole search string, even with alternations present. it also makes ^ and such work in search
 	if s:IsVeryMagic(s:search_str)
 		let s:end_paren = ")"
 	endif
 
-	" this is the only use for separating the match used for finding the next hit and the search used in the actual substitution. the match string is different only in that it has slashes escaped (search always requires that whether the substitution was given with "non-slash" delimiters or not). ONLY escape slashes if the delimiter used by the user was not a slash (in which case they have it manually escaped already) AND the used search string isn't empty (in which case vim will treat custom delimiters the same as slashes and thus require the slashes in the previous search string to be escaped already)
+	" this is the only use for separating the match used for finding the next hit and the search used in the actual substitution. the match string is different only in that it has slashes escaped (search always requires that whether the substitution was given with "non-slash" delimiters or not). ONLY escape slashes if the delimiter used by the user was not a slash (in which case they have it manually escaped already) AND the used search string isn't empty (that's a more hairy situation because vim will then treat custom delimiters normally and thus require the slashes in the previous search string to be escaped already when attempting to use previous searches as match strings)
 	let s:match_str = s:search_str
 	if s:sep !~# '/'
 		if !empty
@@ -223,10 +221,8 @@ fun! easyreplace#EasyReplaceInitiate(init_cmd)
 
 	"echo 'end_paren: '.s:end_paren
 	let @/ = s:match_str
-	if g:erepl_always_verymagic && match(s:search_str, '\v^\\(v|m|V|M)') < 0
-		let @/ = '\v' . s:match_str
-	endif
-	let s:prev_pos = [0, 0, 0, 0]
+
+	let s:next_pos = [0, 0, 0, 0]
 
 	" the marks get changed at feedkeys anyway, so this doesn't really help. not a biggie though, not worth putting to feedkeys
 	call setpos("'<", original_left)
@@ -261,8 +257,12 @@ fun! easyreplace#EasyReplaceDo()
 			let s:replace_str = "~"
 			if s:match_str != @/
 				let s:match_str = @/
-				let s:prev_pos = [0, 0, 0, 0]
-				call s:DefineParen()
+				let s:next_pos = [0, 0, 0, 0]
+				if s:IsVeryMagic(s:match_str)
+					let s:end_paren = ")"
+				else
+					let s:end_paren = "\\)"
+				endif
 			endif
 			let s:search_str = s:match_str
 		else
@@ -299,13 +299,7 @@ fun! easyreplace#EasyReplaceDo()
 			let chars_before = s:CountChars(original_line, end_line)
 			"echo "chars_before" . chars_before
 
-			if g:erepl_always_verymagic && match(s:search_str, '\v^\\(v|m|V|M)') < 0
-				let replace = '\v' . s:search_str
-			else
-				let replace = s:search_str
-			endif
-
-			exe "keepj '<,'>s" . s:sep . "\\%V\\%(" . replace . s:end_paren . s:sep . s:replace_str . s:sep . s:flags
+			exe "keepj '<,'>s" . s:sep . "\\%V\\%(" . s:search_str . s:end_paren . s:sep . s:replace_str . s:sep . s:flags
 			"let g:y= "'<,'>s" . s:sep . "\\%V\\%(" . replace . s:end_paren . s:sep . s:replace_str . s:sep . s:flags
 
 			let chars_after = s:CountChars(original_line, line("."))
@@ -318,11 +312,6 @@ fun! easyreplace#EasyReplaceDo()
 			endif
 
 			call histdel("/", -1)
-			"" not needed as FindNext already sets the search
-			"let @/ = s:match_str
-			"if g:erepl_always_verymagic
-				"let @/ = '\v' . s:match_str
-			"endif
 
 		endif
 
@@ -350,5 +339,5 @@ fun! easyreplace#EasyReplaceDo()
 
 	call feedkeys(g:erepl_after_replace)
 	" clear up unnecessary error prompts caused by "not found" problems (which I can't get rid of because using silent to mute those seems to have weird side effects).
-	call feedkeys("\<esc>", 'n')
+	"call feedkeys("\<esc>", 'n')
 endfunction
