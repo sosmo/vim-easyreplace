@@ -86,6 +86,37 @@ fun! s:IsVeryMagic(search_str)
 	return 0
 endfun
 
+fun! s:RemoveZsZe(search)
+	let parts = split(a:search, '\C\v\\@<!(\\\\)*\zs\\zs')
+	let zs = ''
+	let match_index = 0
+	if len(parts) > 1
+		let zs = parts[0]
+		let esc = '\'
+		if s:IsVeryMagic(zs)
+			let esc = ''
+		endif
+		let zs = '\%(' . zs . esc . ')' . esc . '@<='
+		let match_index = 1
+	endif
+	let parts = split(a:search, '\C\v\\@<!(\\\\)*\zs\\ze')
+	let ze = ''
+	if len(parts) > 1
+		let ze = parts[1]
+		let start_esc = '\'
+		if s:IsVeryMagic(parts[0])
+			let start_esc = ''
+		endif
+		let end_esc = '\'
+		if s:IsVeryMagic(a:search)
+			let end_esc = ''
+		endif
+		let ze = start_esc . '%(' . ze . end_esc . ')' . end_esc . '@='
+	endif
+	let parts = split(a:search, '\C\v\\@<!(\\\\)*\zs\\(zs|ze)')
+	return zs . parts[match_index] . ze
+endfun
+
 fun! s:SubStrCount(str, match, str_len)
 	let found = 0
 	let i = 0
@@ -130,12 +161,12 @@ fun! s:FindNext(start, strict, wrap)
 		" fix "s/aa/a" for "aaaa" and "s/x../xz" for "xyyxyy"
 		" note you can't use delmarks to check if gn found a match, the search needs marks <> for limits
 
-		" setpos won't work for '<'>, I don't understand...
-		" note that \%'< wouldn't work here as reliably.
+		" setpos won't work for '<'> for some reason...
+		" note that \%'< wouldn't work here reliably, better stick with \%V
 		call setpos("'<", a:start)
 		call setpos("'>", [0, line("$"), col([line('$'), '$']), 0])
 
-		" i have no fucking idea why this was needed, but it was. otherwise you get "not found" errors, so better keep it even if it seemingly can work without
+		" without this you get false "not found" errors, so better keep it even if it seemingly can work without
 		let temp = winsaveview()
 		exe "norm! gv\<esc>"
 		call winrestview(temp)
@@ -178,7 +209,7 @@ fun! easyreplace#EasyReplaceInitiate(init_cmd)
 	let original_left = getpos("'<")
 	let original_right = getpos("'>")
 
-	" stop using latest substitution commands every time when explicitly initiated
+	" stop using latest substitution/search commands if explicitly initiated
 	let s:use_prev = 0
 
 	let separator_i = s:FindSeparator(a:init_cmd)
@@ -192,10 +223,10 @@ fun! easyreplace#EasyReplaceInitiate(init_cmd)
 	let substrings = split(strpart(a:init_cmd, separator_i+1), '\C\v\\@<!(\\\\)*\zs'.sep_esc, 1)
 
 	let s:search_str = substrings[0]
-	let empty = 0
+	let was_empty = 0
 	if s:search_str ==# ""
 		let s:search_str = @/
-		let empty = 1
+		let was_empty = 1
 	endif
 	let s:replace_str = get(substrings, 1, "")
 	" if the last group (flags) is present in the substitute operation
@@ -209,16 +240,27 @@ fun! easyreplace#EasyReplaceInitiate(init_cmd)
 		let s:search_str = '\v'. s:search_str
 	endif
 
+	let s:search_str = s:RemoveZsZe(s:search_str)
+
 	let s:end_paren = "\\)"
 	" choose the later parenthesis (defined by the presence of \v) to surround all the search string. this way \%V will always be applied to the whole search string, even with alternations present. it also makes ^ and such work in search
 	if s:IsVeryMagic(s:search_str)
 		let s:end_paren = ")"
 	endif
 
-	" this is the only use for separating the match used for finding the next hit and the search used in the actual substitution. the match string is different only in that it has slashes escaped (search always requires that whether the substitution was given with "non-slash" delimiters or not). ONLY escape slashes if the delimiter used by the user was not a slash (in which case they have it manually escaped already) AND the used search string isn't empty (that's a more hairy situation because vim will then treat custom delimiters normally and thus require the slashes in the previous search string to be escaped already when attempting to use previous searches as match strings)
+	" the match string is different in that it always has slashes escaped (search requires it whether the substitution was given with "non-slash" delimiters or not). ONLY escape slashes if the delimiter used by the user was not a slash (otherwise they have it manually escaped already) AND the used search string isn't empty
 	let s:match_str = s:search_str
+	" if the previous search was initiated from a substitution with a custom delimiter, vim will put the slashes non-escaped into the search register. however in order to use the previous search in the substitution all slashes that are NOT already escaped need to be escaped
+	" there can also be unnecessary escaspes if the custom delimiter was escaped in the previous substitution. no way to get rid of those, vim doesn't either
+	if was_empty
+		let s:match_str = substitute(s:match_str, '\C\v\\@<!(\\\\)*\zs/', '\\/', "g")
+		" if the separator used for the current substitution was a slash, search_str needs to have all the slashes from the previous search escaped too
+		if s:sep =~# '/'
+			let s:search_str = substitute(s:search_str, '\C\v\\@<!(\\\\)*\zs/', '\\/', "g")
+		endif
+	endif
 	if s:sep !~# '/'
-		if !empty
+		if !was_empty
 			let s:match_str = escape(s:match_str, '/')
 		endif
 		" if a custom delimiter was used, we need to remove possible inputted extra escapes from the match string
@@ -239,7 +281,7 @@ fun! easyreplace#EasyReplaceInitiate(init_cmd)
 	" histadd can cause duplicate entries, this should have no side effects
 	" gn might fail on some searches resultin to a mark not set error or moving to wrong position
 	call feedkeys(":let g:erepl_prev_pos = winsaveview()\<cr>/".@/."\<cr>:call winrestview(g:erepl_prev_pos)\<cr>gn\<esc>`<:echo ''\<cr>", 'n')
-	call feedkeys(g:erepl_after_initiate)
+	call feedkeys(g:erepl_after_initiate, 'n')
 endfunction
 
 " doesn't force highlight if it was disabled by the user after the initiation cmd, user can just press "n" to get it back
@@ -264,6 +306,7 @@ fun! easyreplace#EasyReplaceDo()
 			if s:match_str != @/
 				let s:match_str = @/
 				let s:next_pos = [0, 0, 0, 0]
+				let s:match_str = s:RemoveZsZe(s:match_str)
 				if s:IsVeryMagic(s:match_str)
 					let s:end_paren = ")"
 				else
@@ -290,7 +333,7 @@ fun! easyreplace#EasyReplaceDo()
 			exe "normal! gvy\<esc>"
 			let match = @"
 			call setreg('"', user_reg, user_reg_type)
-			" mark the first char of the next result so that the whole result (and not others, so no need to worry about the 'g' flag) is affected by \%V. \%'< would really do the same thing but this seems neater and works for sure
+			" mark the first char of the next result so that the whole result (and not others, so no need to worry about the 'g' flag) is affected by \%V
 			normal! m<m>
 			let original_line = line(".")
 			let original_col = virtcol(".")
@@ -343,7 +386,7 @@ fun! easyreplace#EasyReplaceDo()
 	call setpos("'<", original_left)
 	call setpos("'>", original_right)
 
-	call feedkeys(g:erepl_after_replace)
+	call feedkeys(g:erepl_after_replace, 'n')
 	" clear up unnecessary error prompts caused by "not found" problems (which I can't get rid of because using silent to mute those seems to have weird side effects).
 	call feedkeys("\<esc>", 'n')
 endfunction

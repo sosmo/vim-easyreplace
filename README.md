@@ -9,19 +9,19 @@ Type `:s/foo/bar` like you normally would to substitute "foo" with "bar". Then p
 
 You can prefix the `ctrl-n` command with a count to replace the next *n* matches at once.
 
-Press `cpr` (mnemonic: change previous replace) in normal mode to make easyreplace always replace the latest search result with your latest substitution.
+Press `cpr` (mnemonic: change previous replace) in normal mode to make easyreplace always replace the latest search result with your latest substitution. This is also the default if you haven't started a replace with the initiate key yet, which means you can just type `:s/foo/bar<cr>` and start replacing foos with bars by hitting `ctrl-n`.
 
 
-NOTE: If you are sure you'll never have multiple matches on one line (or you don't mind always replacing all of them at the same time), this built-in solution is probably better for you:
+NOTE: If you are sure you'll never have multiple matches on one line, this built-in solution is probably better for you:
 
     nnoremap <c-n> :&&<cr>j0gn<esc>`<
 
-The built-in solution doesn't move to the next match automatically if you search for something else after starting the substitution. If you consider this a problem you may still want to use this plugin despite the added complexity and the couple of quirks
+ The above replaces all the matches on the current line with the result of your latest substitution. The difference to EasyReplace is that the plugin can handle multiple matches on a line one by one, and is immune to new searches and substitutions if you want it to be.
 
 
 ### Installation
 
-Use your favorite plugin manager, or just paste the files in your vim folder
+Use your favorite plugin manager or just paste the files in your vim folder
 
 
 ### Configuration
@@ -49,7 +49,6 @@ example: `:nmap cpr <Plug>EasyReplaceToggleUsePrevious`
 
 * Really long / complex searches might not work. The gn function used by this plugin tends to sometimes select only the first char on those, and these situations are where the plugin also fails.
 * Searches containing only one char might not work. gn sometimes fails to keep the cursor still when the match is only 1 char long and you're on it. gn might even skip these matches altogether.
-* \zs and \ze don't work in the search pattern (way too big of a hassle to get them right). \@<= and \@= still work normally so they should offer a rather painless workaround.
 * Doesn't "bump up" search/cmd history items (if needed) after replaces, only after initializations.
 
 
