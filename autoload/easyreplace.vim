@@ -251,7 +251,7 @@ fun! easyreplace#EasyReplaceInitiate(init_cmd)
 	" the match string is different in that it always has slashes escaped (search requires it whether the substitution was given with "non-slash" delimiters or not). ONLY escape slashes if the delimiter used by the user was not a slash (otherwise they have it manually escaped already) AND the used search string isn't empty
 	let s:match_str = s:search_str
 	" if the previous search was initiated from a substitution with a custom delimiter, vim will put the slashes non-escaped into the search register. however in order to use the previous search in the substitution all slashes that are NOT already escaped need to be escaped
-	" there can also be unnecessary escaspes if the custom delimiter was escaped in the previous substitution. no way to get rid of those, vim doesn't either
+	" there can also be unnecessary escaspes if the custom delimiter was escaped in the previous substitution. no way to get rid of those, vim doesn't either. fortunately extra escapes don't cause trouble as long as the escaped delimiters don't have a special meaning in any regex mode. using such delimiters should never be done in the first place, and vim disallows most problematic substitutions I can think of
 	if was_empty
 		let s:match_str = substitute(s:match_str, '\C\v\\@<!(\\\\)*\zs/', '\\/', "g")
 		" if the separator used for the current substitution was a slash, search_str needs to have all the slashes from the previous search escaped too
@@ -307,6 +307,9 @@ fun! easyreplace#EasyReplaceDo()
 				let s:match_str = @/
 				let s:next_pos = [0, 0, 0, 0]
 				let s:match_str = s:RemoveZsZe(s:match_str)
+				" make sure there are no unescaped slashes (from substitutions using custom delimiters)
+				" doesn't remove possible escaped custom delimiters
+				let s:match_str = substitute(s:match_str, '\C\v\\@<!(\\\\)*\zs/', '\\/', "g")
 				if s:IsVeryMagic(s:match_str)
 					let s:end_paren = ")"
 				else
