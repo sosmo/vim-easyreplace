@@ -16,7 +16,7 @@ NOTE: If you are sure you'll never have multiple matches on one line, this built
 
     nnoremap <c-n> :&&<cr>j0gn<esc>`<
 
- The above replaces all the matches on the current line with the result of your latest substitution. The difference to EasyReplace is that the plugin can handle multiple matches on a line one by one, and is immune to new searches and substitutions if you want it to be.
+ The above replaces all the matches on the current line with the result of your latest substitution. The difference to easyreplace is that easyreplace can handle multiple matches on a line one by one, and is immune to new searches and substitutions if you want it to be.
 
 
 ### Installation
@@ -26,9 +26,11 @@ Use your favorite plugin manager or just paste the files in your vim folder
 
 ### Configuration
 
-`:let g:erepl_after_initiate = "zz"` Replace the "zz" to issue any normal mode commands to executue after you've entered a regex. NOTE: special characters (such as "<esc>") and """ must be escaped with "\"
+`:let g:erepl_after_initiate = "zz"` (default '') Replace the `zz` to issue any normal mode commands to executue after you've entered a regex. NOTE: special characters (such as `<esc>`) and `"` must be escaped with `\`
 
-`:let g:erepl_after_replace = "zz"` Same as g:erepl_after_initiate, except this gets executed after each substitution
+`:let g:erepl_after_replace = "zz"` (default '') Same as g:erepl_after_initiate, except this gets executed after each substitution
+
+`:let g:erepl_always_verymagic = 1` (default 0) Treat the target regex when executing a new substitution as if it started with `\v` if no other modifiers are given
 
 **Available mappings:**
 
@@ -40,6 +42,10 @@ example: `:cmap <c-x> <Plug>EasyReplaceInitiate`
 
 example: `:nmap <c-x> <Plug>EasyReplaceDo`
 
+`<Plug>EasyReplaceBackwards` Map this to what you want to press in normal mode to substitute the current match and move to the preceding match.
+
+example: `:nmap <c-x> <Plug>EasyReplaceBackwards`
+
 `<Plug>EasyReplaceToggleUsePrevious` Make easyreplace always replace the latest search result with your latest substitution.
 
 example: `:nmap cpr <Plug>EasyReplaceToggleUsePrevious`
@@ -49,6 +55,7 @@ example: `:nmap cpr <Plug>EasyReplaceToggleUsePrevious`
 
 * Really long / complex searches might not work. The gn function used by this plugin tends to sometimes select only the first char on those, and these situations are where the plugin also fails.
 * Searches containing only one char might not work. gn sometimes fails to keep the cursor still when the match is only 1 char long and you're on it. gn might even skip these matches altogether.
+* If your substitution contains lookbehinds you might unwantedly get new matches or lose old ones between substitutions. This happens when the text seen by the next lookbehind changes after a substitution. If this ever becomes a problem you'll just have to use a normal substitution with the `c` flag instead.
 * Doesn't "bump up" search/cmd history items (if needed) after replaces, only after initializations.
 
 

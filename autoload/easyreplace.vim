@@ -12,7 +12,7 @@ let s:replace_str = ""
 let s:flags = ""
 " The whole search is enclosed in one set of parentheses, and depending of the magic type of the substitution, we either need to escape the latter paren or not
 let s:end_paren = "\\)"
-" last position where the cursor left off after the substitution operation
+" The position where the cursor left off after the last substitution operation
 let s:next_pos = [0, 0, 0, 0]
 
 
@@ -25,7 +25,7 @@ fun! s:FindSeparator(subst_cmd)
 	let i = 0
 	while i < len && cont
 		if strpart(a:subst_cmd, i, 1) ==# 's'
-			let separator_i = match(a:subst_cmd, '\C\v(su{0,1}b{0,1}s{0,1}t{0,1}i{0,1}t{0,1}u{0,1}t{0,1}e{0,1} *)@<=[^0-9A-Za-z_ ]', i)
+			let separator_i = match(a:subst_cmd, '\C\v(s|su|sub|subs|subst|substi|substit|substitu|substitut|substitute)@<=[^0-9A-Za-z_ ]', i)
 			let cont = 0
 		elseif strpart(a:subst_cmd, i, 1) ==# "'"
 			let i += 2
@@ -47,10 +47,11 @@ fun! s:DefineFlags(flags_string)
 	" remove possible "c" flag
 	let s:flags = substitute(s:flags, '\Cc', '', "g")
 	" conform to possible "I"/"i" flag
-	if match(s:flags, '\CI') != -1
+	let big_i = match(s:flags, '\CI')
+	if big_i > -1
 		let s:search_str .= "\\C"
 	endif
-	if match(s:flags, '\Ci') != -1
+	if match(s:flags, '\Ci') > big_i
 		let s:search_str .= "\\c"
 	endif
 	" add e flag to suppress errors
@@ -130,10 +131,10 @@ fun! s:SubStrCount(str, match, str_len)
 	return found
 endfun
 
-fun! s:CountChars(start, end)
-	let line = a:start
+fun! s:CountChars(start_line, end_line)
+	let line = a:start_line
 	let chars = 0
-	while line <= a:end
+	while line <= a:end_line
 		let chars += strlen(substitute(getline(line), ".", "x", "g"))
 		" also count newlines
 		let chars += 1
@@ -143,30 +144,34 @@ fun! s:CountChars(start, end)
 endfun
 
 " @return 0 if no match, 1 if match without wrap, 2 if match with wrap
-fun! s:FindNext(start, strict, wrap)
+" mark the match with '< and '> if one was found
+" note: will wrap regardless of the 'nowrap' option, even though it shouldn't
+fun! s:FindNext(match, start, strict, wrap)
 	let ret = 0
 
+	" if the search wasn't strict, we can match any hit that the cursor is on, and even hits behind the cursor if wrap is enabled. if we're on the first character of the buffer we don't have to worry about previous matches.
+	" the delmarks approach seems to work here, not sure why
 	if !a:strict || (line(".") == 1 && virtcol(".") == 1)
 		delmarks <>
 
-		let @/ = s:match_str
+		let @/ = a:match
 		exe "normal! gn\<esc>"
 
-		if line("'<") == 0
-			norm m<m>
+		if line("'<") < 1
+			" make sure the marks exist
+			norm! m<m>
 			return 0
 		endif
 		let ret = 1
 	else
-		" fix "s/aa/a" for "aaaa" and "s/x../xz" for "xyyxyy"
-		" note you can't use delmarks to check if gn found a match, the search needs marks <> for limits
+		" fix "s/aa/a" for "aaaa" and "s/x../xz" for "xyyxyy" by disallowing matches whose first character is behind the cursor
 
-		" setpos won't work for '<'> for some reason...
+		" note you can't use delmarks here. for some reason vim refuses to set the marks when you execute gn\<esc> within the script (extra gv doesn't help either), so even if a match is found and gn selects the area, it's still impossible to know there was a match because the marks aren't set
 		" note that \%'< wouldn't work here reliably, better stick with \%V
 		call setpos("'<", a:start)
 		call setpos("'>", [0, line("$"), col([line('$'), '$']), 0])
 
-		" without this you get false "not found" errors, so better keep it even if it seemingly can work without
+		" without selecting the marks in visual mode you get false "not found" errors, so better keep it even if it seemingly can work without
 		let temp = winsaveview()
 		exe "norm! gv\<esc>"
 		call winrestview(temp)
@@ -174,24 +179,37 @@ fun! s:FindNext(start, strict, wrap)
 		normal! h
 		let before_search = getpos(".")
 
-		" watch out, using silent instead of exe might break moving to the next match
-		keepj exe "normal! /\\%V\\(" . s:match_str . s:end_paren . "\<cr>\<esc>"
+		" watch out, using silent in place of exe might break moving to the next match
+		" putting silent before normal should work
+		" '/' wraps around regardless of the 'nowrap' setting, but setting the @/ register directly and doing 'n' doesn't help either so this will do
+		keepj exe "silent! normal! /\\%V\\(" . a:match . s:end_paren . "\<cr>\<esc>"
+
 		" get the boundaries for the current match
 		" gn sometimes fails to keep the cursor still when the match is only 1 char long and you're on it. most notably when the match is 1 char long and on the last col of a line. sometimes gn only selects the first char when the search string is complex. this may break the whole substitution at worst
 		exe "normal! gn\<esc>"
 
 		" doesn't remove the existing entry if the user at some point happened to search for the exact same string as above. cool. probably thanks to :h function-search-undo?
 		call histdel("/", -1)
-		let @/ = s:match_str
+		let @/ = a:match
 
-		if getpos(".") == before_search && a:wrap
-			let &wrapscan = 1
-			keepj exe "norm! ngn\<esc>`<"
-			" note: this fails when the match is 1 char long, it's the only match in the buffer, and the function gets called after replacing the match with the exact same char - after a substitution the cursor will initially be to the right of the "new" match, so when we move it to the left on top of that match and wrap around with search, we'll not move at all even though a match was found
-			if getpos(".") != before_search
-				let ret = 2
+		" if no match found but wrap is used
+		if getpos(".") == before_search
+			if a:wrap
+				let &wrapscan = 1
+				keepj exe "sil! norm! ngn\<esc>"
+				" if a match was found after a wrap
+				" note: this fails when the match is 1 char long, it's the only match in the buffer, and the function gets called after replacing the match with the exact same char - after a substitution the cursor will initially be to the right of the "new" match, so when we move it to the left on top of that match and wrap around with search, we'll not move at all even though a match was found
+				if getpos(".") != before_search
+					let ret = 2
+				else
+					" make sure the marks exist
+					norm! m<m>
+				endif
+			else
+				" make sure the marks exist
+				norm! m<m>
 			endif
-		elseif a:wrap
+		else
 			let ret = 1
 		endif
 
@@ -201,8 +219,37 @@ fun! s:FindNext(start, strict, wrap)
 	return ret
 endfun
 
+fun! s:CheckPrevSearch()
+	if s:use_prev
+		let s:sep = "/"
+		let s:flags = "&"
+		let s:replace_str = "~"
+		if s:match_str != @/
+			let s:match_str = @/
+			" this makes sure we don't ever match strictly when useprev is enabled
+			let s:next_pos = [0, 0, 0, 0]
+			let s:match_str = s:RemoveZsZe(s:match_str)
+			" make sure there are no unescaped slashes (from substitutions using custom delimiters)
+			" doesn't remove possible escaped custom delimiters
+			let s:match_str = substitute(s:match_str, '\C\v\\@<!(\\\\)*\zs/', '\\/', "g")
+			if s:IsVeryMagic(s:match_str)
+				let s:end_paren = ")"
+			else
+				let s:end_paren = "\\)"
+			endif
+		endif
+		let s:search_str = s:match_str
+	else
+		if s:match_str ==# ""
+			return
+		endif
+		let @/ = s:match_str
+	endif
+endfun
+
 fun! easyreplace#EasyReplaceToggleUsePrevious()
 	let s:use_prev = !s:use_prev
+	echo s:use_prev ? 'Mode: Use latest search' : 'Mode: Ignore searches'
 endfun
 
 fun! easyreplace#EasyReplaceInitiate(init_cmd)
@@ -258,28 +305,24 @@ fun! easyreplace#EasyReplaceInitiate(init_cmd)
 		if s:sep =~# '/'
 			let s:search_str = substitute(s:search_str, '\C\v\\@<!(\\\\)*\zs/', '\\/', "g")
 		endif
-	endif
-	if s:sep !~# '/'
-		if !was_empty
-			let s:match_str = escape(s:match_str, '/')
-		endif
+	elseif s:sep !~# '/'
+		let s:match_str = escape(s:match_str, '/')
 		" if a custom delimiter was used, we need to remove possible inputted extra escapes from the match string
 		let s:match_str = substitute(s:match_str, '\C\v\\@<!(\\\\)*\zs\\'.sep_esc, s:sep, "g")
 	endif
 
-	"echo 'end_paren: '.s:end_paren
 	let @/ = s:match_str
 
+	" this makes sure we don't match strictly when executing the first substitution
 	let s:next_pos = [0, 0, 0, 0]
 
 	" the marks get changed at feedkeys anyway, so this doesn't really help. not a biggie though, not worth putting to feedkeys
 	call setpos("'<", original_left)
 	call setpos("'>", original_right)
-	"let g:a= [s:match_str, s:search_str, s:replace_str]
 
 	" ugly ahead: add search to the history, trigger highlighting if hlsearch is on, and move to the closest occurrence
 	" histadd can cause duplicate entries, this should have no side effects
-	" gn might fail on some searches resultin to a mark not set error or moving to wrong position
+	" gn might fail on some searches resulting to a mark not set error or moving to wrong position
 	call feedkeys(":let g:erepl_prev_pos = winsaveview()\<cr>/".@/."\<cr>:call winrestview(g:erepl_prev_pos)\<cr>gn\<esc>`<:echo ''\<cr>", 'n')
 	call feedkeys(g:erepl_after_initiate, 'n')
 endfunction
@@ -299,40 +342,19 @@ fun! easyreplace#EasyReplaceDo()
 	let times = v:count1
 	while cycles < times
 
-		if s:use_prev
-			let s:sep = "/"
-			let s:flags = "&"
-			let s:replace_str = "~"
-			if s:match_str != @/
-				let s:match_str = @/
-				let s:next_pos = [0, 0, 0, 0]
-				let s:match_str = s:RemoveZsZe(s:match_str)
-				" make sure there are no unescaped slashes (from substitutions using custom delimiters)
-				" doesn't remove possible escaped custom delimiters
-				let s:match_str = substitute(s:match_str, '\C\v\\@<!(\\\\)*\zs/', '\\/', "g")
-				if s:IsVeryMagic(s:match_str)
-					let s:end_paren = ")"
-				else
-					let s:end_paren = "\\)"
-				endif
-			endif
-			let s:search_str = s:match_str
-		else
-			if s:match_str ==# ""
-				return
-			endif
-			let @/ = s:match_str
-		endif
+		call s:CheckPrevSearch()
 
 		set whichwrap+=l
 		set virtualedit=onemore
 
 		let curr_pos = getpos(".")
 		" if the cursor is where the previous substitution left it, operate strictly. trying to emulate CursorMoved autocmd, obviously works differently when moving around and returning back, but that might not be bad at all
-		if s:FindNext(curr_pos, curr_pos == s:next_pos, user_wrapscan) == 1
+		" there's still a bug with lookbehinds. when you do a substitution it can change the results of the lookbehinds ahead of the substitution you just did. this can add new matches or remove existing matches unwantedly between substitutions. there's absolutely no way around this: if you store the next match before the substitution takes place, and remove lookbehinds from the substitution, you mess up backreferences and stuff. if you do a copy of the original buffer to locate matches, you can't edit anything so you might as well use the 'c' flag with a normal substitution instead.
+		if s:FindNext(s:match_str, curr_pos, curr_pos == s:next_pos, user_wrapscan) == 1
 
 			let user_reg = getreg('"')
 			let user_reg_type = getregtype('"')
+			" select the match marked by FindNext and yank it
 			exe "normal! gvy\<esc>"
 			let match = @"
 			call setreg('"', user_reg, user_reg_type)
@@ -342,22 +364,15 @@ fun! easyreplace#EasyReplaceDo()
 			let original_col = virtcol(".")
 
 			let match_len = strlen(substitute(match, ".", "x", "g"))
-			"echo "@\"".match
 			let match_height = s:SubStrCount(match, '\n', match_len) + 1
-			"echo "match_len".match_len
-			"echo "match_height".match_height
 
 			let end_line = original_line + match_height - 1
 			let chars_before = s:CountChars(original_line, end_line)
-			"echo "chars_before" . chars_before
 
 			exe "keepj '<,'>s" . s:sep . "\\%V\\%(" . s:search_str . s:end_paren . s:sep . s:replace_str . s:sep . s:flags
-			"let g:y= "'<,'>s" . s:sep . "\\%V\\%(" . replace . s:end_paren . s:sep . s:replace_str . s:sep . s:flags
 
 			let chars_after = s:CountChars(original_line, line("."))
-			"echo "chars_after" . chars_after
 			let offset = match_len + (chars_after - chars_before)
-			"echo "offset" . offset
 			keepj exe 'normal! `<'
 			if offset > 0
 				exe 'normal! ' . offset . 'l'
@@ -367,18 +382,25 @@ fun! easyreplace#EasyReplaceDo()
 
 		endif
 
-		let found = s:FindNext(getpos("."), 1, user_wrapscan)
+		let found = s:FindNext(s:match_str, getpos("."), 1, user_wrapscan)
 
 		let s:next_pos = getpos(".")
 
 		let cycles += 1
 	endwhile
 
-	" these should technically go to feedkeys, now they aren't always shown
-	if found > 0
-		echo "/" . strpart(s:match_str, 0, msg_len)
+	" these should technically go to feedkeys
+	let msg = strpart(s:match_str, 0, msg_len)
+	if found == 1
+		echo '/' . msg
+	elseif found == 2
+		echohl WarningMsg
+		echo 'Wrapped around: ' . msg
+		echohl None
 	else
-		echo "No more matches: " . strpart(s:match_str, 0, msg_len)
+		echohl WarningMsg
+		echo 'No more matches: ' . msg
+		echohl None
 	endif
 
 	let &virtualedit = user_virtualedit
@@ -390,6 +412,90 @@ fun! easyreplace#EasyReplaceDo()
 	call setpos("'>", original_right)
 
 	call feedkeys(g:erepl_after_replace, 'n')
-	" clear up unnecessary error prompts caused by "not found" problems (which I can't get rid of because using silent to mute those seems to have weird side effects).
-	call feedkeys("\<esc>", 'n')
+endfunction
+
+fun! s:FindPrev(match)
+	let ret = 1
+
+	normal! l
+    let before_search = getpos(".")
+
+	keepj exe "normal! ?" . a:match . "\<cr>\<esc>"
+
+	exe "normal! gn\<esc>"
+
+	call histdel("/", -1)
+	let @/ = a:match
+
+	if getpos(".") == before_search
+		let ret = 0
+		norm! m<m>
+	endif
+
+	keepj norm! `<
+	return ret
+endfun
+
+fun! easyreplace#EasyReplaceDoBackwards()
+	let original_left = getpos("'<")
+	let original_right = getpos("'>")
+
+	let user_wrapscan = &wrapscan
+	let user_virtualedit = &virtualedit
+	let user_whichwrap = &whichwrap
+
+	let msg_len = float2nr(winwidth(0) / 1.5) - 17
+
+	let cycles = 0
+	let times = v:count1
+	while cycles < times
+
+		call s:CheckPrevSearch()
+
+		set whichwrap+=l
+		set virtualedit=onemore
+
+		let found = 0
+		if s:FindPrev(s:match_str) == 1
+
+			let view = winsaveview()
+			let original_line = line(".")
+
+			norm! h
+			let found = s:FindPrev(s:match_str)
+			let s:next_pos = getpos(".")
+
+			call winrestview(view)
+			normal! m<m>
+			norm! `<
+
+			exe "keepj '<,'>s" . s:sep . "\\%V\\%(" . s:search_str . s:end_paren . s:sep . s:replace_str . s:sep . s:flags
+
+			call setpos('.', s:next_pos)
+
+			call histdel("/", -1)
+
+		endif
+
+		let cycles += 1
+	endwhile
+
+	let msg = strpart(s:match_str, 0, msg_len)
+	if found == 1
+		echo '?' . msg
+	else
+		echohl WarningMsg
+		echo 'No earlier matches: ' . msg
+		echohl None
+	endif
+
+	let &virtualedit = user_virtualedit
+
+	let &wrapscan = user_wrapscan
+	let &whichwrap = user_whichwrap
+
+	call setpos("'<", original_left)
+	call setpos("'>", original_right)
+
+	call feedkeys(g:erepl_after_replace, 'n')
 endfunction
