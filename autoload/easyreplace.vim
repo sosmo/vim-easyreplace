@@ -219,32 +219,25 @@ fun! s:FindNext(match, start, strict, wrap)
 	return ret
 endfun
 
-fun! s:CheckPrevSearch()
-	if s:use_prev
-		let s:sep = "/"
-		let s:flags = "&"
-		let s:replace_str = "~"
-		if s:match_str != @/
-			let s:match_str = @/
-			" this makes sure we don't ever match strictly when useprev is enabled
-			let s:next_pos = [0, 0, 0, 0]
-			let s:match_str = s:RemoveZsZe(s:match_str)
-			" make sure there are no unescaped slashes (from substitutions using custom delimiters)
-			" doesn't remove possible escaped custom delimiters
-			let s:match_str = substitute(s:match_str, '\C\v\\@<!(\\\\)*\zs/', '\\/', "g")
-			if s:IsVeryMagic(s:match_str)
-				let s:end_paren = ")"
-			else
-				let s:end_paren = "\\)"
-			endif
+fun! s:InitPrevSearch()
+	let s:sep = "/"
+	let s:flags = "&"
+	let s:replace_str = "~"
+	if s:match_str != @/
+		let s:match_str = @/
+		" this makes sure we don't ever match strictly when useprev is enabled
+		let s:next_pos = [0, 0, 0, 0]
+		let s:match_str = s:RemoveZsZe(s:match_str)
+		" make sure there are no unescaped slashes (from substitutions using custom delimiters)
+		" doesn't remove possible escaped custom delimiters
+		let s:match_str = substitute(s:match_str, '\C\v\\@<!(\\\\)*\zs/', '\\/', "g")
+		if s:IsVeryMagic(s:match_str)
+			let s:end_paren = ")"
+		else
+			let s:end_paren = "\\)"
 		endif
-		let s:search_str = s:match_str
-	else
-		if s:match_str ==# ""
-			return
-		endif
-		let @/ = s:match_str
 	endif
+	let s:search_str = s:match_str
 endfun
 
 fun! easyreplace#EasyReplaceToggleUsePrevious()
@@ -342,7 +335,14 @@ fun! easyreplace#EasyReplaceDo()
 	let times = v:count1
 	while cycles < times
 
-		call s:CheckPrevSearch()
+		if s:use_prev
+			call s:InitPrevSearch()
+		else
+			if s:match_str ==# ""
+				return
+			endif
+			let @/ = s:match_str
+		endif
 
 		set whichwrap+=l
 		set virtualedit=onemore
@@ -450,7 +450,14 @@ fun! easyreplace#EasyReplaceDoBackwards()
 	let times = v:count1
 	while cycles < times
 
-		call s:CheckPrevSearch()
+		if s:use_prev
+			call s:InitPrevSearch()
+		else
+			if s:match_str ==# ""
+				return
+			endif
+			let @/ = s:match_str
+		endif
 
 		set whichwrap+=l
 		set virtualedit=onemore
