@@ -466,7 +466,6 @@ fun! easyreplace#EasyReplaceDoBackwards()
 		if s:FindPrev(s:match_str) == 1
 
 			let view = winsaveview()
-			let original_line = line(".")
 
 			norm! h
 			let found = s:FindPrev(s:match_str)
@@ -474,7 +473,6 @@ fun! easyreplace#EasyReplaceDoBackwards()
 
 			call winrestview(view)
 			normal! m<m>
-			norm! `<
 
 			exe "keepj '<,'>s" . s:sep . "\\%V\\%(" . s:search_str . s:end_paren . s:sep . s:replace_str . s:sep . s:flags
 
