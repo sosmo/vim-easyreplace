@@ -50,6 +50,10 @@
 "
 "example: `:nmap cpr <Plug>EasyReplaceToggleUsePrevious`
 "
+"`<Plug>EasyReplaceArea` Map this in visual mode to replace all your selected matches at once.
+"
+"example: `:vmap <c-x> <Plug>EasyReplaceArea`
+"
 "
 "### Bugs
 "
@@ -88,6 +92,8 @@ nnoremap <silent> <Plug>EasyReplaceDo :<c-u>call easyreplace#EasyReplaceDo()<cr>
 nnoremap <silent> <Plug>EasyReplaceToggleUsePrevious :<c-u>call easyreplace#EasyReplaceToggleUsePrevious()<cr>
 
 nnoremap <silent> <Plug>EasyReplaceBackwards :<c-u>call easyreplace#EasyReplaceDoBackwards()<cr>
+
+vnoremap <silent> <Plug>EasyReplaceArea :<c-u>call easyreplace#SubstituteArea()<cr>
 
 
 " <c-cr> doesn't work for most terminals.

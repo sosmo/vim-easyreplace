@@ -50,6 +50,10 @@ example: `:nmap <c-x> <Plug>EasyReplaceBackwards`
 
 example: `:nmap cpr <Plug>EasyReplaceToggleUsePrevious`
 
+`<Plug>EasyReplaceArea` Map this in visual mode to replace all your selected matches at once.
+
+example: `:vmap <c-x> <Plug>EasyReplaceArea`
+
 
 ### Bugs
 

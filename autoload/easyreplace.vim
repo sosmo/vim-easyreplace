@@ -42,6 +42,7 @@ fun! s:FindSeparator(subst_cmd)
 	return separator_i
 endfun
 
+
 fun! s:DefineFlags(flags_string)
 	let s:flags = a:flags_string
 	" remove possible "c" flag
@@ -54,9 +55,8 @@ fun! s:DefineFlags(flags_string)
 	if match(s:flags, '\Ci') > big_i
 		let s:search_str .= "\\c"
 	endif
-	" add e flag to suppress errors
-	let s:flags .= 'e'
 endfun
+
 
 fun! s:MatchBackwards(str, match)
 	" note that multi-byte chars throw this off, doesn't matter here because the result is used as a byte-wise index
@@ -72,6 +72,7 @@ fun! s:MatchBackwards(str, match)
 	return found
 endf
 
+
 fun! s:IsVeryMagic(search_str)
 	let magic = ""
 	" get the last magic operator
@@ -86,6 +87,7 @@ fun! s:IsVeryMagic(search_str)
 	endif
 	return 0
 endfun
+
 
 fun! s:RemoveZsZe(search)
 	let parts = split(a:search, '\C\v\\@<!(\\\\)*\zs\\zs')
@@ -118,6 +120,7 @@ fun! s:RemoveZsZe(search)
 	return zs . parts[match_index] . ze
 endfun
 
+
 fun! s:SubStrCount(str, match, str_len)
 	let found = 0
 	let i = 0
@@ -142,6 +145,7 @@ fun! s:CountChars(start_line, end_line)
 	endwhile
 	return chars
 endfun
+
 
 " @return 0 if no match, 1 if match without wrap, 2 if match with wrap
 " mark the match with '< and '> if one was found
@@ -219,6 +223,7 @@ fun! s:FindNext(match, start, strict, wrap)
 	return ret
 endfun
 
+
 fun! s:InitPrevSearch()
 	let s:sep = "/"
 	let s:flags = "&"
@@ -240,10 +245,12 @@ fun! s:InitPrevSearch()
 	let s:search_str = s:match_str
 endfun
 
+
 fun! easyreplace#EasyReplaceToggleUsePrevious()
 	let s:use_prev = !s:use_prev
 	echo s:use_prev ? 'Mode: Use latest search' : 'Mode: Ignore searches'
 endfun
+
 
 fun! easyreplace#EasyReplaceInitiate(init_cmd)
 	let original_left = getpos("'<")
@@ -320,6 +327,7 @@ fun! easyreplace#EasyReplaceInitiate(init_cmd)
 	call feedkeys(g:erepl_after_initiate, 'n')
 endfunction
 
+
 " doesn't force highlight if it was disabled by the user after the initiation cmd, user can just press "n" to get it back
 fun! easyreplace#EasyReplaceDo()
 	let original_left = getpos("'<")
@@ -369,7 +377,7 @@ fun! easyreplace#EasyReplaceDo()
 			let end_line = original_line + match_height - 1
 			let chars_before = s:CountChars(original_line, end_line)
 
-			exe "keepj '<,'>s" . s:sep . "\\%V\\%(" . s:search_str . s:end_paren . s:sep . s:replace_str . s:sep . s:flags
+			exe "keepj '<,'>s" . s:sep . "\\%V\\%(" . s:search_str . s:end_paren . s:sep . s:replace_str . s:sep . s:flags . 'e'
 
 			let chars_after = s:CountChars(original_line, line("."))
 			let offset = match_len + (chars_after - chars_before)
@@ -414,15 +422,17 @@ fun! easyreplace#EasyReplaceDo()
 	call feedkeys(g:erepl_after_replace, 'n')
 endfunction
 
+
 fun! s:FindPrev(match)
 	let ret = 1
 
+	" there's no special treatment for the last char of the buffer because when this is called virtualedi=onemore will be set and the 'l' can still move the cursor
 	normal! l
     let before_search = getpos(".")
 
 	keepj exe "normal! ?" . a:match . "\<cr>\<esc>"
 
-	exe "normal! gn\<esc>"
+	exe "normal! gno\<esc>"
 
 	call histdel("/", -1)
 	let @/ = a:match
@@ -435,6 +445,7 @@ fun! s:FindPrev(match)
 	keepj norm! `<
 	return ret
 endfun
+
 
 fun! easyreplace#EasyReplaceDoBackwards()
 	let original_left = getpos("'<")
@@ -474,7 +485,7 @@ fun! easyreplace#EasyReplaceDoBackwards()
 			call winrestview(view)
 			normal! m<m>
 
-			exe "keepj '<,'>s" . s:sep . "\\%V\\%(" . s:search_str . s:end_paren . s:sep . s:replace_str . s:sep . s:flags
+			exe "keepj '<,'>s" . s:sep . "\\%V\\%(" . s:search_str . s:end_paren . s:sep . s:replace_str . s:sep . s:flags . 'e'
 
 			call setpos('.', s:next_pos)
 
@@ -504,3 +515,27 @@ fun! easyreplace#EasyReplaceDoBackwards()
 
 	call feedkeys(g:erepl_after_replace, 'n')
 endfunction
+
+
+fun! easyreplace#SubstituteArea()
+	if s:use_prev
+		call s:InitPrevSearch()
+	else
+		if s:match_str ==# ""
+			return
+		endif
+		let @/ = s:match_str
+	endif
+
+	let search = @/
+
+	exe "silent! keepj '<,'>s" . s:sep . "\\%V\\%(" . s:search_str . s:end_paren . s:sep . s:replace_str . s:sep . s:flags . 'e'
+
+	call histdel("/", -1)
+	let @/ = search
+
+	redraw
+	let msg_len = float2nr(winwidth(0) / 1.5) - 17
+	let msg = strpart(s:match_str, 0, msg_len)
+	echo msg
+endfun
