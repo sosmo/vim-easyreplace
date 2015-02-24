@@ -2,6 +2,8 @@
 "
 "Replace the substitute mode launched with the `c` flag (as in `:s/foo/bar/c`) with a solution that allows you to stay in normal mode and freely move / execute other commands while substituting.
 "
+"![Sample pic](/../screenshots/1.gif?raw=true "easyreplace in action")
+"
 "
 "### Usage
 "
