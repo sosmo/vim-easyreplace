@@ -93,29 +93,29 @@ nnoremap <silent> <Plug>EasyReplaceBackwards :<c-u>call easyreplace#EasyReplaceD
 " <c-cr> doesn't work for most terminals.
 " for terminals by default use <c-b> to initiate from insert mode (cmdwindow) and <c-g> to initiate from cmdline
 if has("gui_running")
-	if !hasmapto('<Plug>EasyReplaceInitiate') && maparg('<c-n>', 'i') ==# ''
+	if !hasmapto('<Plug>EasyReplaceInitiate', 'i') && maparg('<c-cr>', 'i') ==# ''
 		imap <c-cr> <Plug>EasyReplaceInitiate
 	endif
-	if !hasmapto('<Plug>EasyReplaceInitiate') && maparg('<c-n>', 'n') ==# ''
+	if !hasmapto('<Plug>EasyReplaceInitiate', 'n') && maparg('<c-cr>', 'n') ==# ''
 		nmap <c-cr> <Plug>EasyReplaceInitiate
 	endif
-	if !hasmapto('<Plug>EasyReplaceInitiate') && maparg('<c-n>', 'c') ==# ''
+	if !hasmapto('<Plug>EasyReplaceInitiate', 'c') && maparg('<c-cr>', 'c') ==# ''
 		cmap <c-cr> <Plug>EasyReplaceInitiate
 	endif
 else
-	if !hasmapto('<Plug>EasyReplaceInitiate') && maparg('<c-n>', 'i') ==# ''
+	if !hasmapto('<Plug>EasyReplaceInitiate', 'i') && maparg('<c-b>', 'i') ==# ''
 		imap <c-b> <Plug>EasyReplaceInitiate
 	endif
-	if !hasmapto('<Plug>EasyReplaceInitiate') && maparg('<c-n>', 'c') ==# ''
+	if !hasmapto('<Plug>EasyReplaceInitiate', 'c') && maparg('<c-g>', 'c') ==# ''
 		cmap <c-g> <Plug>EasyReplaceInitiate
 	endif
 endif
 
-if !hasmapto('<Plug>EasyReplaceDo') && maparg('<c-n>', 'n') ==# ''
+if !hasmapto('<Plug>EasyReplaceDo', 'n') && maparg('<c-n>', 'n') ==# ''
 	nmap <c-n> <Plug>EasyReplaceDo
 endif
 
 " mnemonic: change previous replace
-if !hasmapto('<Plug>EasyReplaceToggleUsePrevious') && maparg('cpr', 'n') ==# ''
+if !hasmapto('<Plug>EasyReplaceToggleUsePrevious', 'n') && maparg('cpr', 'n') ==# ''
 	nmap cpr <Plug>EasyReplaceToggleUsePrevious
 endif
