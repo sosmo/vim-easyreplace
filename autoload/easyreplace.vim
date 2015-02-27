@@ -1,23 +1,19 @@
 " Whether to use the latest search and latest substitution replacement (~) to find and replace when executing EasyReplaceDo
 let s:use_prev = 1
-" Separator used in substitution
-let s:sep = "/"
-" The string to be used in the replace operation
-let s:search_str = ""
-" The string to be used for finding matches. Unlike search_str, this can't have special delimiters so instead '/' will always be eascaped and custom delimiters will be de-escaped if they were given
-let s:match_str = ""
-" String to replace search_str with
-let s:replace_str = ""
+" The string to be replaced with replace_str, also used for finding matches
+let s:match_str = ''
+" String to replace match_str
+let s:replace_str = ''
 " Flags of the substitution
-let s:flags = ""
-" The whole search is enclosed in one set of parentheses, and depending of the magic type of the substitution, we either need to escape the latter paren or not
-let s:end_paren = "\\)"
+let s:flags = ''
+" The whole search is enclosed in one set of parentheses, and depending of the magic type of the search we either need to escape the latter paren or not
+let s:end_paren = '\)'
 " The position where the cursor left off after the last substitution operation
 let s:next_pos = [0, 0, 0, 0]
 
 
-" pretty unnecessary, but fun
-fun! s:FindSeparator(subst_cmd)
+" returns the index of the separator used in a subsitution command
+fun! easyreplace#FindSeparator(subst_cmd)
 	let separator_i = -1
 	let cont = 1
 	" note that multi-byte chars throw this off, doesn't matter here because the result is used as a byte-wise index
@@ -25,7 +21,7 @@ fun! s:FindSeparator(subst_cmd)
 	let i = 0
 	while i < len && cont
 		if strpart(a:subst_cmd, i, 1) ==# 's'
-			let separator_i = match(a:subst_cmd, '\C\v(s|su|sub|subs|subst|substi|substit|substitu|substitut|substitute)@<=[^0-9A-Za-z_ ]', i)
+			let separator_i = match(a:subst_cmd, '\C\v((substitute|substitut|substitu|substit|substi|subst|subs|sub|su|s) *)@<=[^0-9A-Za-z_ ]', i)
 			let cont = 0
 		elseif strpart(a:subst_cmd, i, 1) ==# "'"
 			let i += 2
@@ -43,22 +39,47 @@ fun! s:FindSeparator(subst_cmd)
 endfun
 
 
-fun! s:DefineFlags(flags_string)
-	let s:flags = a:flags_string
-	" remove possible "c" flag
-	let s:flags = substitute(s:flags, '\Cc', '', "g")
-	" conform to possible "I"/"i" flag
-	let big_i = match(s:flags, '\CI')
-	if big_i > -1
-		let s:search_str .= "\\C"
+" returns the parts of a substitution cmd in a 4-element array as [range, match, replace, flags]
+" range and flags are trimmed
+" if there are missing parts they're represented by empty strings
+" if there is no separator after the 's' part an empty array is returned
+fun! easyreplace#ParseSubstitution(cmd)
+	let separator_i = easyreplace#FindSeparator(a:cmd)
+	if separator_i < 0
+		return []
 	endif
-	if match(s:flags, '\Ci') > big_i
-		let s:search_str .= "\\c"
+	let sep = strpart(a:cmd, separator_i, 1)
+	" escape the separator for the split regex if necessary (if it's a special char with verymagic)
+	let sep_esc = escape(sep, '/.?=%@*+&<>()[]{}^$~|\')
+
+	let substrings = split(strpart(a:cmd, separator_i+1), '\v\\@<!(\\\\)*\zs'.sep_esc, 1)
+	let range = strpart(a:cmd, 0, separator_i)
+	let len = len(substrings) + 1
+
+	let range = substitute(range, '\C\v *(substitute|substitut|substitu|substit|substi|subst|subs|sub|su|s) *$', '', '')
+	let range = substitute(range, '\v^ +', '', '')
+
+	let parts = []
+	call add(parts, range)
+	for str in substrings
+		call add(parts, str)
+	endfor
+
+	let empty_places = 4 - len
+	while empty_places > 0
+		call add(parts, '')
+		let empty_places -= 1
+	endwhile
+
+	if len > 3
+		let parts[3] = substitute(parts[3], '\v^ +| +$', '', 'g')
 	endif
+
+	return parts
 endfun
 
 
-fun! s:MatchBackwards(str, match)
+fun! easyreplace#MatchBackwards(str, match)
 	" note that multi-byte chars throw this off, doesn't matter here because the result is used as a byte-wise index
 	let i = 0
 	let found = -1
@@ -73,15 +94,15 @@ fun! s:MatchBackwards(str, match)
 endf
 
 
-fun! s:IsVeryMagic(search_str)
+fun! easyreplace#IsVeryMagic(search)
 	let magic = ""
 	" get the last magic operator
-	let magic_i = s:MatchBackwards(a:search_str, '\C\v\\@<!(\\\\)*\zs\\(v|m|M|V)')
+	let magic_i = easyreplace#MatchBackwards(a:search, '\C\v\\@<!(\\\\)*\zs\\(v|m|M|V)')
 	if magic_i >= 0
-		let magic = strpart(a:search_str, magic_i, 2)
+		let magic = strpart(a:search, magic_i, 2)
 	endif
 	"" slow regex
-	"let magic = matchstr(a:search_str, '\v\C(\\@<!(\\\\)*\zs\\(v|m|M|V))@<!.*\\@<!(\\\\)*\zs\\(v|m|M|V)')
+	"let magic = matchstr(a:search, '\v\C(\\@<!(\\\\)*\zs\\(v|m|M|V))@<!.*\\@<!(\\\\)*\zs\\(v|m|M|V)')
 	if magic ==# '\v'
 		return 1
 	endif
@@ -89,42 +110,11 @@ fun! s:IsVeryMagic(search_str)
 endfun
 
 
-fun! s:RemoveZsZe(search)
-	let parts = split(a:search, '\C\v\\@<!(\\\\)*\zs\\zs')
-	let zs = ''
-	let match_index = 0
-	if len(parts) > 1
-		let zs = parts[0]
-		let esc = '\'
-		if s:IsVeryMagic(zs)
-			let esc = ''
-		endif
-		let zs = '\%(' . zs . esc . ')' . esc . '@<='
-		let match_index = 1
-	endif
-	let parts = split(a:search, '\C\v\\@<!(\\\\)*\zs\\ze')
-	let ze = ''
-	if len(parts) > 1
-		let ze = parts[1]
-		let start_esc = '\'
-		if s:IsVeryMagic(parts[0])
-			let start_esc = ''
-		endif
-		let end_esc = '\'
-		if s:IsVeryMagic(a:search)
-			let end_esc = ''
-		endif
-		let ze = start_esc . '%(' . ze . end_esc . ')' . end_esc . '@='
-	endif
-	let parts = split(a:search, '\C\v\\@<!(\\\\)*\zs\\(zs|ze)')
-	return zs . parts[match_index] . ze
-endfun
-
-
-fun! s:SubStrCount(str, match, str_len)
+fun! easyreplace#SubStrCount(str, match)
 	let found = 0
+	let len = len(a:str)
 	let i = 0
-	while i < a:str_len && i >= 0
+	while i < len && i >= 0
 		let i = match(a:str, a:match, i)
 		if i >= 0
 			let found += 1
@@ -134,7 +124,8 @@ fun! s:SubStrCount(str, match, str_len)
 	return found
 endfun
 
-fun! s:CountChars(start_line, end_line)
+
+fun! easyreplace#CountChars(start_line, end_line)
 	let line = a:start_line
 	let chars = 0
 	while line <= a:end_line
@@ -147,13 +138,84 @@ fun! s:CountChars(start_line, end_line)
 endfun
 
 
+fun! s:HandleFlags(flags)
+	let s:flags = a:flags
+
+	" remove possible "c" flag
+	let s:flags = substitute(s:flags, '\Cc', '', "g")
+
+	" conform to possible "I"/"i" flag
+	let big_i = match(s:flags, '\CI')
+	if big_i > -1
+		let s:match_str .= "\\C"
+	endif
+	if match(s:flags, '\Ci') > big_i
+		let s:match_str .= "\\c"
+	endif
+endfun
+
+
+fun! s:HandleZsZe(search)
+	let parts = split(a:search, '\C\v\\@<!(\\\\)*\zs\\zs')
+	let zs = ''
+	let match_index = 0
+	if len(parts) > 1
+		let zs = parts[0]
+		let esc = '\'
+		if easyreplace#IsVeryMagic(zs)
+			let esc = ''
+		endif
+		let zs = '\%(' . zs . esc . ')' . esc . '@<='
+		let match_index = 1
+	endif
+	let parts = split(a:search, '\C\v\\@<!(\\\\)*\zs\\ze')
+	let ze = ''
+	if len(parts) > 1
+		let ze = parts[1]
+		let start_esc = '\'
+		if easyreplace#IsVeryMagic(parts[0])
+			let start_esc = ''
+		endif
+		let end_esc = '\'
+		if easyreplace#IsVeryMagic(a:search)
+			let end_esc = ''
+		endif
+		let ze = start_esc . '%(' . ze . end_esc . ')' . end_esc . '@='
+	endif
+	let parts = split(a:search, '\C\v\\@<!(\\\\)*\zs\\(zs|ze)')
+	return zs . parts[match_index] . ze
+endfun
+
+
+fun! s:InitPrevSearch()
+	let s:flags = "&"
+	let s:replace_str = "~"
+	if s:match_str ==# @/
+		return
+	endif
+	let s:match_str = @/
+	" this makes sure we don't ever match strictly when useprev is enabled
+	let s:next_pos = [0, 0, 0, 0]
+	let s:match_str = s:HandleZsZe(s:match_str)
+	" make sure there are no unescaped slashes (from substitutions using custom delimiters)
+	" doesn't remove possible escaped custom delimiters
+	let s:match_str = substitute(s:match_str, '\C\v\\@<!(\\\\)*\zs/', '\\/', "g")
+	if easyreplace#IsVeryMagic(s:match_str)
+		let s:end_paren = ')'
+	else
+		let s:end_paren = '\)'
+	endif
+endfun
+
+
 " @return 0 if no match, 1 if match without wrap, 2 if match with wrap
 " mark the match with '< and '> if one was found
+" end_paren can either be ')' if the match pattern uses verymagic or '\)' otherwise
 " note: will wrap regardless of the 'nowrap' option, even though it shouldn't
-fun! s:FindNext(match, start, strict, wrap)
+fun! s:FindNext(match, start, strict, wrap, end_paren)
 	let ret = 0
 
-	" if the search wasn't strict, we can match any hit that the cursor is on, and even hits behind the cursor if wrap is enabled. if we're on the first character of the buffer we don't have to worry about previous matches.
+	" if the search wasn't strict, we can match any hit that the cursor is on (not just those that start at the cursor), and even hits behind the cursor if wrap is enabled. if we're on the first character of the buffer we don't have to worry about any of that
 	" the delmarks approach seems to work here, not sure why
 	if !a:strict || (line(".") == 1 && virtcol(".") == 1)
 		delmarks <>
@@ -164,12 +226,11 @@ fun! s:FindNext(match, start, strict, wrap)
 		if line("'<") < 1
 			" make sure the marks exist
 			norm! m<m>
-			return 0
+		else
+			let ret = 1
 		endif
-		let ret = 1
+	" fix "s/aa/a" for "aaaa" and "s/x../xz" for "xyyxyy" by disallowing matches whose first character is behind the cursor
 	else
-		" fix "s/aa/a" for "aaaa" and "s/x../xz" for "xyyxyy" by disallowing matches whose first character is behind the cursor
-
 		" note you can't use delmarks here. for some reason vim refuses to set the marks when you execute gn\<esc> within the script (extra gv doesn't help either), so even if a match is found and gn selects the area, it's still impossible to know there was a match because the marks aren't set
 		" note that \%'< wouldn't work here reliably, better stick with \%V
 		call setpos("'<", a:start)
@@ -186,7 +247,7 @@ fun! s:FindNext(match, start, strict, wrap)
 		" watch out, using silent in place of exe might break moving to the next match
 		" putting silent before normal should work
 		" '/' wraps around regardless of the 'nowrap' setting, but setting the @/ register directly and doing 'n' doesn't help either so this will do
-		keepj exe "silent! normal! /\\%V\\(" . a:match . s:end_paren . "\<cr>\<esc>"
+		keepj exe "silent! normal! /\\%V\\(" . a:match . a:end_paren . "\<cr>\<esc>"
 
 		" get the boundaries for the current match
 		" gn sometimes fails to keep the cursor still when the match is only 1 char long and you're on it. most notably when the match is 1 char long and on the last col of a line. sometimes gn only selects the first char when the search string is complex. this may break the whole substitution at worst
@@ -224,25 +285,32 @@ fun! s:FindNext(match, start, strict, wrap)
 endfun
 
 
-fun! s:InitPrevSearch()
-	let s:sep = "/"
-	let s:flags = "&"
-	let s:replace_str = "~"
-	if s:match_str != @/
-		let s:match_str = @/
-		" this makes sure we don't ever match strictly when useprev is enabled
-		let s:next_pos = [0, 0, 0, 0]
-		let s:match_str = s:RemoveZsZe(s:match_str)
-		" make sure there are no unescaped slashes (from substitutions using custom delimiters)
-		" doesn't remove possible escaped custom delimiters
-		let s:match_str = substitute(s:match_str, '\C\v\\@<!(\\\\)*\zs/', '\\/', "g")
-		if s:IsVeryMagic(s:match_str)
-			let s:end_paren = ")"
-		else
-			let s:end_paren = "\\)"
-		endif
+fun! s:FindPrev(match)
+	let ret = 1
+
+	" there's no special treatment for the last char of the buffer because when this is called virtualedit=onemore will be set and the 'l' can still move the cursor
+	normal! l
+    let before_search = getpos(".")
+
+	keepj exe "silent! normal! ?" . a:match . "\<cr>\<esc>"
+
+	exe "normal! gno\<esc>"
+
+	call histdel("/", -1)
+	let @/ = a:match
+
+	if getpos(".") == before_search
+		let ret = 0
+		norm! m<m>
 	endif
-	let s:search_str = s:match_str
+
+	keepj norm! `<
+	return ret
+endfun
+
+
+fun! s:GetMsgLen()
+	return float2nr(winwidth(0) / 1.5) - 17
 endfun
 
 
@@ -253,72 +321,46 @@ endfun
 
 
 fun! easyreplace#EasyReplaceInitiate(init_cmd)
-	let original_left = getpos("'<")
-	let original_right = getpos("'>")
+	" make sure the marks exist, they're used later
+	if line("'<") < 1
+		call setpos("'<", '.')
+		call setpos("'>", '.')
+	endif
 
 	" stop using latest substitution/search commands if explicitly initiated
 	let s:use_prev = 0
 
-	let separator_i = s:FindSeparator(a:init_cmd)
-	if separator_i < 0
-		return
+	let parts = easyreplace#ParseSubstitution(a:init_cmd)
+
+	let s:match_str = parts[1]
+	if s:match_str ==# ""
+		let s:match_str = @/
+	elseif g:erepl_always_verymagic && match(s:match_str, '\C\v^\\(v|m|V|M)') < 0
+		let s:match_str = '\v' . s:match_str
 	endif
-	let s:sep = strpart(a:init_cmd, separator_i, 1)
-	" escape the separator for the split regex if necessary (if it's a special char with verymagic)
-	let sep_esc = escape(s:sep, '/.?=%@*+&<>()[]{}^$~|\')
+	let s:match_str = s:HandleZsZe(s:match_str)
 
-	let substrings = split(strpart(a:init_cmd, separator_i+1), '\C\v\\@<!(\\\\)*\zs'.sep_esc, 1)
+	let s:replace_str = parts[2]
 
-	let s:search_str = substrings[0]
-	let was_empty = 0
-	if s:search_str ==# ""
-		let s:search_str = @/
-		let was_empty = 1
-	endif
-	let s:replace_str = get(substrings, 1, "")
-	" if the last group (flags) is present in the substitute operation
-	if len(substrings) == 3
-		call s:DefineFlags(substrings[2])
-	else
-		let s:flags = "e"
-	endif
+	call s:HandleFlags(parts[3])
 
-	if g:erepl_always_verymagic && match(s:search_str, '\v^\\(v|m|V|M)') < 0
-		let s:search_str = '\v'. s:search_str
-	endif
-
-	let s:search_str = s:RemoveZsZe(s:search_str)
-
-	let s:end_paren = "\\)"
+	let s:end_paren = '\)'
 	" choose the later parenthesis (defined by the presence of \v) to surround all the search string. this way \%V will always be applied to the whole search string, even with alternations present. it also makes ^ and such work in search
-	if s:IsVeryMagic(s:search_str)
+	if easyreplace#IsVeryMagic(s:match_str)
 		let s:end_paren = ")"
 	endif
 
-	" the match string is different in that it always has slashes escaped (search requires it whether the substitution was given with "non-slash" delimiters or not). ONLY escape slashes if the delimiter used by the user was not a slash (otherwise they have it manually escaped already) AND the used search string isn't empty
-	let s:match_str = s:search_str
-	" if the previous search was initiated from a substitution with a custom delimiter, vim will put the slashes non-escaped into the search register. however in order to use the previous search in the substitution all slashes that are NOT already escaped need to be escaped
-	" there can also be unnecessary escaspes if the custom delimiter was escaped in the previous substitution. no way to get rid of those, vim doesn't either. fortunately extra escapes don't cause trouble as long as the escaped delimiters don't have a special meaning in any regex mode. using such delimiters should never be done in the first place, and vim disallows most problematic substitutions I can think of
-	if was_empty
-		let s:match_str = substitute(s:match_str, '\C\v\\@<!(\\\\)*\zs/', '\\/', "g")
-		" if the separator used for the current substitution was a slash, search_str needs to have all the slashes from the previous search escaped too
-		if s:sep =~# '/'
-			let s:search_str = substitute(s:search_str, '\C\v\\@<!(\\\\)*\zs/', '\\/', "g")
-		endif
-	elseif s:sep !~# '/'
-		let s:match_str = escape(s:match_str, '/')
-		" if a custom delimiter was used, we need to remove possible inputted extra escapes from the match string
-		let s:match_str = substitute(s:match_str, '\C\v\\@<!(\\\\)*\zs\\'.sep_esc, s:sep, "g")
-	endif
+	" if we use the previous search (leave the match part empty) and it was initiated from a substitution with a custom delimiter, vim will put the slashes non-escaped into the search register. however in order to use the previous search in the substitution all slashes that are NOT already escaped need to be escaped
+	" same thing if the current substitution is written using a custom delimiter, all non-escaped slashes must be escaped
+	" so we can safely escape non-escaped slashes in any situation
+	" custom delimiters leave unnecessary escapes in the match, but vim luckily ignores them as long as their escaped forms aren't special characters in the current regex mode (which they shouldn't be)
+	" always using '/' as the delimiter is smart because that way there won't be problems differentiating between escaped delimiters and escaped special characters
+	let s:match_str = substitute(s:match_str, '\C\v\\@<!(\\\\)*\zs/', '\\/', "g")
 
 	let @/ = s:match_str
 
 	" this makes sure we don't match strictly when executing the first substitution
 	let s:next_pos = [0, 0, 0, 0]
-
-	" the marks get changed at feedkeys anyway, so this doesn't really help. not a biggie though, not worth putting to feedkeys
-	call setpos("'<", original_left)
-	call setpos("'>", original_right)
 
 	" ugly ahead: add search to the history, trigger highlighting if hlsearch is on, and move to the closest occurrence
 	" histadd can cause duplicate entries, this should have no side effects
@@ -337,7 +379,7 @@ fun! easyreplace#EasyReplaceDo()
 	let user_virtualedit = &virtualedit
 	let user_whichwrap = &whichwrap
 
-	let msg_len = float2nr(winwidth(0) / 1.5) - 17
+	let msg_len = s:GetMsgLen()
 
 	let cycles = 0
 	let times = v:count1
@@ -358,7 +400,7 @@ fun! easyreplace#EasyReplaceDo()
 		let curr_pos = getpos(".")
 		" if the cursor is where the previous substitution left it, operate strictly. trying to emulate CursorMoved autocmd, obviously works differently when moving around and returning back, but that might not be bad at all
 		" there's still a bug with lookbehinds. when you do a substitution it can change the results of the lookbehinds ahead of the substitution you just did. this can add new matches or remove existing matches unwantedly between substitutions. there's absolutely no way around this: if you store the next match before the substitution takes place, and remove lookbehinds from the substitution, you mess up backreferences and stuff. if you do a copy of the original buffer to locate matches, you can't edit anything so you might as well use the 'c' flag with a normal substitution instead.
-		if s:FindNext(s:match_str, curr_pos, curr_pos == s:next_pos, user_wrapscan) == 1
+		if s:FindNext(s:match_str, curr_pos, curr_pos == s:next_pos, user_wrapscan, s:end_paren) == 1
 
 			let user_reg = getreg('"')
 			let user_reg_type = getregtype('"')
@@ -371,15 +413,16 @@ fun! easyreplace#EasyReplaceDo()
 			let original_line = line(".")
 			let original_col = virtcol(".")
 
-			let match_len = strlen(substitute(match, ".", "x", "g"))
-			let match_height = s:SubStrCount(match, '\n', match_len) + 1
+			" newlines should also count for length because virtualedit is enabled. '.' works in the pattern too
+			let match_len = strlen(substitute(match, '\_.', 'x', 'g'))
+			let match_height = easyreplace#SubStrCount(match, '\n') + 1
 
 			let end_line = original_line + match_height - 1
-			let chars_before = s:CountChars(original_line, end_line)
+			let chars_before = easyreplace#CountChars(original_line, end_line)
 
-			exe "keepj '<,'>s" . s:sep . "\\%V\\%(" . s:search_str . s:end_paren . s:sep . s:replace_str . s:sep . s:flags . 'e'
+			exe "keepj '<,'>s/\\%V\\%(" . s:match_str . s:end_paren . '/' . s:replace_str . '/' . s:flags . 'e'
 
-			let chars_after = s:CountChars(original_line, line("."))
+			let chars_after = easyreplace#CountChars(original_line, line("."))
 			let offset = match_len + (chars_after - chars_before)
 			keepj exe 'normal! `<'
 			if offset > 0
@@ -390,7 +433,7 @@ fun! easyreplace#EasyReplaceDo()
 
 		endif
 
-		let found = s:FindNext(s:match_str, getpos("."), 1, user_wrapscan)
+		let found = s:FindNext(s:match_str, getpos("."), 1, user_wrapscan, s:end_paren)
 
 		let s:next_pos = getpos(".")
 
@@ -423,30 +466,6 @@ fun! easyreplace#EasyReplaceDo()
 endfunction
 
 
-fun! s:FindPrev(match)
-	let ret = 1
-
-	" there's no special treatment for the last char of the buffer because when this is called virtualedi=onemore will be set and the 'l' can still move the cursor
-	normal! l
-    let before_search = getpos(".")
-
-	keepj exe "normal! ?" . a:match . "\<cr>\<esc>"
-
-	exe "normal! gno\<esc>"
-
-	call histdel("/", -1)
-	let @/ = a:match
-
-	if getpos(".") == before_search
-		let ret = 0
-		norm! m<m>
-	endif
-
-	keepj norm! `<
-	return ret
-endfun
-
-
 fun! easyreplace#EasyReplaceDoBackwards()
 	let original_left = getpos("'<")
 	let original_right = getpos("'>")
@@ -455,7 +474,7 @@ fun! easyreplace#EasyReplaceDoBackwards()
 	let user_virtualedit = &virtualedit
 	let user_whichwrap = &whichwrap
 
-	let msg_len = float2nr(winwidth(0) / 1.5) - 17
+	let msg_len = s:GetMsgLen()
 
 	let cycles = 0
 	let times = v:count1
@@ -485,7 +504,7 @@ fun! easyreplace#EasyReplaceDoBackwards()
 			call winrestview(view)
 			normal! m<m>
 
-			exe "keepj '<,'>s" . s:sep . "\\%V\\%(" . s:search_str . s:end_paren . s:sep . s:replace_str . s:sep . s:flags . 'e'
+			exe "keepj '<,'>s/\\%V\\%(" . s:match_str . s:end_paren . '/' . s:replace_str . '/' . s:flags . 'e'
 
 			call setpos('.', s:next_pos)
 
@@ -529,13 +548,13 @@ fun! easyreplace#SubstituteArea()
 
 	let search = @/
 
-	exe "silent! keepj '<,'>s" . s:sep . "\\%V\\%(" . s:search_str . s:end_paren . s:sep . s:replace_str . s:sep . s:flags . 'e'
+	exe "silent! keepj '<,'>s/\\%V\\%(" . s:match_str . s:end_paren . '/' . s:replace_str . '/' . s:flags . 'e'
 
 	call histdel("/", -1)
 	let @/ = search
 
 	redraw
-	let msg_len = float2nr(winwidth(0) / 1.5) - 17
+	let msg_len = s:GetMsgLen()
 	let msg = strpart(s:match_str, 0, msg_len)
 	echo msg
 endfun
