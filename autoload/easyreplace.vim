@@ -269,6 +269,8 @@ fun! s:FindNext(match, strict, wrap, end_paren)
 		let @/ = '\%V\(' . a:match . a:end_paren
 
 		" note: search() fails when the match starts with a newline and cursor is directly next to it
+		" this should solve that
+		norm! h
 		let found = search('\%V\(' . a:match . a:end_paren, 'cW')
 
 		if found != 0
@@ -287,6 +289,9 @@ fun! s:FindNext(match, strict, wrap, end_paren)
 			" mark the full match
 			" gn sometimes fails to keep the cursor still when the match is only 1 char long and you're on it. most notably when the match is 1 char long and on the last col of a line. sometimes gn only selects the first char when the search string is complex. this may break the whole substitution at worst
 			exe "normal! gn\<esc>"
+		else
+			" undo the previous 'h' if we didn't move to a new match
+			call winrestview(temp)
 		endif
 
 	endif
