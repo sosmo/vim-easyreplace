@@ -40,9 +40,13 @@ Use your favorite plugin manager or just paste the files in your vim folder
 
 example: `:cmap <c-x> <Plug>EasyReplaceInitiate`
 
-`<Plug>EasyReplaceDo` Map this to what you want to press in normal mode to substitute the current match.
+`<Plug>EasyReplaceDo` Map this to what you want to press in normal mode to substitute the current match and move to the next match after that.
 
 example: `:nmap <c-x> <Plug>EasyReplaceDo`
+
+`<Plug>EasyReplaceInPlace` Map this to what you want to press in normal mode to substitute the current match and stay in place.
+
+example: `:nmap <leader>n <Plug>EasyReplaceInPlace`
 
 `<Plug>EasyReplaceBackwards` Map this to what you want to press in normal mode to substitute the current match and move to the preceding match.
 

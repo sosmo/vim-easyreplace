@@ -40,9 +40,13 @@
 "
 "example: `:cmap <c-x> <Plug>EasyReplaceInitiate`
 "
-"`<Plug>EasyReplaceDo` Map this to what you want to press in normal mode to substitute the current match.
+"`<Plug>EasyReplaceDo` Map this to what you want to press in normal mode to substitute the current match and move to the next match after that.
 "
 "example: `:nmap <c-x> <Plug>EasyReplaceDo`
+"
+"`<Plug>EasyReplaceInPlace` Map this to what you want to press in normal mode to substitute the current match and stay in place.
+"
+"example: `:nmap <leader>n <Plug>EasyReplaceInPlace`
 "
 "`<Plug>EasyReplaceBackwards` Map this to what you want to press in normal mode to substitute the current match and move to the preceding match.
 "
@@ -89,7 +93,9 @@ inoremap <silent> <Plug>EasyReplaceInitiate <c-c><c-c>:call easyreplace#EasyRepl
 nnoremap <silent> <Plug>EasyReplaceInitiate <c-c><c-c>:call easyreplace#EasyReplaceInitiate(histget(":", -1))<cr>
 cnoremap <silent> <Plug>EasyReplaceInitiate <c-c>:call easyreplace#EasyReplaceInitiate(histget(":", -1))<cr>
 
-nnoremap <silent> <Plug>EasyReplaceDo :<c-u>call easyreplace#EasyReplaceDo()<cr>
+nnoremap <silent> <Plug>EasyReplaceDo :<c-u>call easyreplace#EasyReplaceDo(1)<cr>
+
+nnoremap <silent> <Plug>EasyReplaceInPlace :<c-u>call easyreplace#EasyReplaceDo(0)<cr>
 
 nnoremap <silent> <Plug>EasyReplaceToggleUsePrevious :<c-u>call easyreplace#EasyReplaceToggleUsePrevious()<cr>
 
