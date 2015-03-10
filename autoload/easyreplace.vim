@@ -152,6 +152,9 @@ fun! s:HandleFlags(flags)
 	if match(s:flags, '\Ci') > big_i
 		let s:match_str .= "\\c"
 	endif
+
+	" I don't think there's any reason to keep the 'n' flag
+	let s:flags = substitute(s:flags, '\Cn', '', "g")
 endfun
 
 
@@ -208,14 +211,17 @@ fun! s:InitPrevSearch()
 endfun
 
 
-" @return 0 if no match, 1 if match without wrap, 2 if match with wrap
+" return 0 if no match, 1 if match without wrap, 2 if match with wrap
 " mark the match with '< and '> if one was found
+" strict: if 1 the first character of the match isn't allowed to be in front of the cursor, if 0 the match may start before the cursor as long as it's partially under it
 " end_paren can either be ')' if the match pattern uses verymagic or '\)' otherwise
-" note: will wrap regardless of the 'nowrap' option, even though it shouldn't
 fun! s:FindNext(match, strict, wrap, end_paren)
 	" set virtualedit onemore so you can move on linefeeds
 	let user_virtualedit = &virtualedit
 	set virtualedit=onemore
+
+	let user_sel = &selection
+	set sel=inclusive
 
 	" wrapscan doesn't need to be stored, but if the search finds no matches vim will toggle wrapscan off for some reason so this is easier than surrounding everything with try
 	let user_wrapscan = &wrapscan
@@ -292,11 +298,13 @@ fun! s:FindNext(match, strict, wrap, end_paren)
 		else
 			" undo the previous 'h' if we didn't move to a new match
 			call winrestview(temp)
+			norm! m<m>
 		endif
 
 	endif
 
 	let &virtualedit = user_virtualedit
+	let &selection = user_sel
 	let &wrapscan = user_wrapscan
 
 	let @/ = a:match
@@ -309,6 +317,9 @@ endfun
 fun! s:FindPrev(match, wrap)
 	let user_virtualedit = &virtualedit
 	set virtualedit=onemore
+
+	let user_sel = &selection
+	set sel=inclusive
 
 	let user_wrapscan = &wrapscan
 
@@ -339,6 +350,7 @@ fun! s:FindPrev(match, wrap)
 	endif
 
 	let &virtualedit = user_virtualedit
+	let &selection = user_sel
 	let &wrapscan = user_wrapscan
 
 	keepj norm! `<
@@ -405,7 +417,7 @@ fun! easyreplace#EasyReplaceInitiate(init_cmd)
 
 	" ugly ahead: add search to the history, trigger highlighting if hlsearch is on, and move to the closest occurrence
 	" histadd can cause duplicate entries, this should have no side effects
-	" gn might fail on some searches resulting to a mark not set error or moving to wrong position
+	" gn might fail on some searches resulting to moving to wrong position
 	call feedkeys(":let g:erepl_prev_pos = winsaveview()\<cr>/".@/."\<cr>:call winrestview(g:erepl_prev_pos)\<cr>gn\<esc>`<:echo ''\<cr>", 'n')
 	call feedkeys(g:erepl_after_initiate, 'n')
 endfunction
@@ -421,6 +433,9 @@ fun! easyreplace#EasyReplaceDo(move)
 	let user_wrapscan = &wrapscan
 	let user_virtualedit = &virtualedit
 	let user_whichwrap = &whichwrap
+
+	let user_sel = &selection
+	set sel=inclusive
 
 	let msg_len = s:GetMsgLen()
 
@@ -515,6 +530,7 @@ fun! easyreplace#EasyReplaceDo(move)
 
 	let &wrapscan = user_wrapscan
 	let &whichwrap = user_whichwrap
+	let &selection = user_sel
 
 	call setpos("'<", original_left)
 	call setpos("'>", original_right)
@@ -523,6 +539,7 @@ fun! easyreplace#EasyReplaceDo(move)
 endfunction
 
 
+" doesn't have a 'strict' option yet. it's not that useful and only would take effect after a forward replace
 fun! easyreplace#EasyReplaceDoBackwards()
 	let original_left = getpos("'<")
 	let original_right = getpos("'>")
@@ -530,6 +547,9 @@ fun! easyreplace#EasyReplaceDoBackwards()
 	let user_wrapscan = &wrapscan
 	let user_virtualedit = &virtualedit
 	let user_whichwrap = &whichwrap
+
+	let user_sel = &selection
+	set sel=inclusive
 
 	let msg_len = s:GetMsgLen()
 
@@ -557,7 +577,6 @@ fun! easyreplace#EasyReplaceDoBackwards()
 
 		let view = winsaveview()
 
-		let next_match = getpos('.')
 		norm! h
 		let found = s:FindPrev(s:match_str, user_wrapscan)
 		if found != 0
@@ -606,6 +625,7 @@ fun! easyreplace#EasyReplaceDoBackwards()
 
 	let &wrapscan = user_wrapscan
 	let &whichwrap = user_whichwrap
+	let &selection = user_sel
 
 	call setpos("'<", original_left)
 	call setpos("'>", original_right)
