@@ -223,8 +223,11 @@ fun! s:FindNext(match, strict, wrap, end_paren)
 	let user_sel = &selection
 	set sel=inclusive
 
-	" wrapscan doesn't need to be stored, but if the search finds no matches vim will toggle wrapscan off for some reason so this is easier than surrounding everything with try
+	" if the search finds no matches vim will toggle wrapscan off for some reason so storing and restoring is easier than surrounding everything with try
 	let user_wrapscan = &wrapscan
+
+	let user_lazy = &lazyredraw
+	set lazyredraw
 
 	let start = getpos('.')
 	let ret = 0
@@ -235,6 +238,7 @@ fun! s:FindNext(match, strict, wrap, end_paren)
 		delmarks <>
 
 		let @/ = a:match
+		set nowrapscan
 		exe "normal! gn\<esc>"
 
 		let found = line("'<") > 0
@@ -266,18 +270,18 @@ fun! s:FindNext(match, strict, wrap, end_paren)
 		call winrestview(temp)
 
 		" this is a dummy search and it's here because vim refuses to add a jump point with m' or setpos. this leaves a mark even with the 'keepj'
-		keepj exe "silent! normal! h/\\%V\\(" . a:match . a:end_paren . "\<cr>\<esc>"
+		keepj exe "silent! normal! h/\\%V\\%(" . a:match . a:end_paren . "\<cr>\<esc>"
 		" histdel doesn't remove user's previous searches here, no need to worry about that
 		call histdel("/", -1)
 		call winrestview(temp)
 
 		" set this so 'gn' works later on
-		let @/ = '\%V\(' . a:match . a:end_paren
+		let @/ = '\%V\%(' . a:match . a:end_paren
 
 		" note: search() fails when the match starts with a newline and cursor is directly next to it
 		" this should solve that
 		norm! h
-		let found = search('\%V\(' . a:match . a:end_paren, 'cW')
+		let found = search('\%V\%(' . a:match . a:end_paren, 'cW')
 
 		if found != 0
 			let ret = 1
@@ -306,6 +310,7 @@ fun! s:FindNext(match, strict, wrap, end_paren)
 	let &virtualedit = user_virtualedit
 	let &selection = user_sel
 	let &wrapscan = user_wrapscan
+	let &lazyredraw = user_lazy
 
 	let @/ = a:match
 
@@ -322,6 +327,9 @@ fun! s:FindPrev(match, wrap)
 	set sel=inclusive
 
 	let user_wrapscan = &wrapscan
+
+	let user_lazy = &lazyredraw
+	set lazyredraw
 
 	let ret = 0
 
@@ -352,6 +360,7 @@ fun! s:FindPrev(match, wrap)
 	let &virtualedit = user_virtualedit
 	let &selection = user_sel
 	let &wrapscan = user_wrapscan
+	let &lazyredraw = user_lazy
 
 	keepj norm! `<
 	return ret
@@ -436,6 +445,9 @@ fun! easyreplace#EasyReplaceDo(move)
 
 	let user_sel = &selection
 	set sel=inclusive
+
+	let user_lazy = &lazyredraw
+	set lazyredraw
 
 	let msg_len = s:GetMsgLen()
 
@@ -531,6 +543,7 @@ fun! easyreplace#EasyReplaceDo(move)
 	let &wrapscan = user_wrapscan
 	let &whichwrap = user_whichwrap
 	let &selection = user_sel
+	let &lazyredraw = user_lazy
 
 	call setpos("'<", original_left)
 	call setpos("'>", original_right)
@@ -550,6 +563,9 @@ fun! easyreplace#EasyReplaceDoBackwards()
 
 	let user_sel = &selection
 	set sel=inclusive
+
+	let user_lazy = &lazyredraw
+	set lazyredraw
 
 	let msg_len = s:GetMsgLen()
 
@@ -626,6 +642,7 @@ fun! easyreplace#EasyReplaceDoBackwards()
 	let &wrapscan = user_wrapscan
 	let &whichwrap = user_whichwrap
 	let &selection = user_sel
+	let &lazyredraw = user_lazy
 
 	call setpos("'<", original_left)
 	call setpos("'>", original_right)
