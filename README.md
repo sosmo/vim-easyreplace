@@ -5,7 +5,7 @@ Replace the substitute mode launched with the `c` flag (as in `:s/foo/bar/c`) wi
 ![Sample pic](/../screenshots/1.gif?raw=true "easyreplace in action")
 
 
-### Usage
+## Usage
 
 Type `:s/foo/bar` like you normally would to substitute "foo" with "bar". Then press the initiate key set by this plugin (`ctrl-enter` if you run Vim with a GUI, otherwise `ctrl-g` for the command line and `ctrl-b` for the command window). You'll be put back to normal mode on the next match of `foo`. Now you can press `ctrl-n` in normal mode replace the closest `foo` with `bar` (and move to the next `foo` if possible). Or, unlike with `:s/foo/bar/c`, you can do any normal mode stuff you feel like doing. Use `n` to skip results between `c-n`s as you normally would.
 
@@ -16,17 +16,17 @@ Press `cpr` (mnemonic: change previous replace) in normal mode to make easyrepla
 
 NOTE: If you are sure you'll never have multiple matches on one line, this built-in solution is probably better for you:
 
-    nnoremap <c-n> :&&<cr>j0gn<esc>`<
+	nnoremap <c-n> :&&<cr>j0gn<esc>`<
 
- The above replaces all the matches on the current line with the result of your latest substitution. The difference to easyreplace is that easyreplace can handle multiple matches on a line one by one, and is immune to new searches and substitutions if you want it to be.
+The above replaces all the matches on the current line with the result of your latest substitution. The difference to easyreplace is that easyreplace can handle multiple matches on a line one by one, and is immune to new searches and substitutions if you want it to be.
 
 
-### Installation
+## Installation
 
 Use your favorite plugin manager or just paste the files in your vim folder
 
 
-### Configuration
+## Configuration
 
 `:let g:erepl_after_initiate = "zz"` (default '') Replace the `zz` to issue any normal mode commands to executue after you've entered a regex. NOTE: special characters (such as `<esc>`) and `"` must be escaped with `\`
 
@@ -58,10 +58,10 @@ example: `:nmap cpr <Plug>EasyReplaceToggleUsePrevious`
 
 `<Plug>EasyReplaceArea` Map this in visual mode to replace all your selected matches at once.
 
-example: `:vmap <c-x> <Plug>EasyReplaceArea`
+example: `:xmap <c-x> <Plug>EasyReplaceArea`
 
 
-### Bugs
+## Bugs
 
 * Really long / complex searches might not work. The gn function used by this plugin tends to sometimes select only the first char on those, and these situations are where the plugin also fails.
 * Searches containing only one char might not work. gn sometimes fails to keep the cursor still when the match is only 1 char long and you're on it. gn might even skip these matches altogether.
@@ -69,6 +69,6 @@ example: `:vmap <c-x> <Plug>EasyReplaceArea`
 * Doesn't "bump up" search/cmd history items (if needed) after replaces, only after initializations.
 
 
-### License
+## License
 
 Published under the MIT License.

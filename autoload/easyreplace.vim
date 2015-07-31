@@ -477,14 +477,17 @@ fun! easyreplace#EasyReplaceDo(move)
 		let user_reg = getreg('"')
 		let user_reg_type = getregtype('"')
 		" select the match marked by FindNext and yank it
-		exe "normal! gvy\<esc>"
+		exe "normal! gv\"\"y\<esc>"
 
 		let match = @"
 		call setreg('"', user_reg, user_reg_type)
+
 		" mark the first char of the next result so that the whole result (and not others, so no need to worry about the 'g' flag) is affected by \%V
 		normal! m<m>
 		let original_line = line(".")
 		let original_col = virtcol(".")
+
+		" NOTE: tried using the built-in line2byte function to calculate substitution offset based on the total buffer byte count. ran into problems with some searches containing newlines at the start/end.
 
 		" newlines should also count for length because virtualedit is enabled. '.' works in the pattern too
 		let match_len = strlen(substitute(match, '\_.', 'x', 'g'))
