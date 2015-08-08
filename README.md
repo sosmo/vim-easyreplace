@@ -61,6 +61,12 @@ example: `:nmap cpr <Plug>EasyReplaceToggleUsePrevious`
 example: `:xmap <c-x> <Plug>EasyReplaceArea`
 
 
+## Requirements
+
+* The 'history' setting set to 1 or more (sorry!)
+* Vim 7.4+
+
+
 ## Bugs
 
 * Really long / complex searches might not work. The gn function used by this plugin tends to sometimes select only the first char on those, and these situations are where the plugin also fails.

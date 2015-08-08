@@ -61,6 +61,12 @@
 "example: `:xmap <c-x> <Plug>EasyReplaceArea`
 "
 "
+"## Requirements
+"
+"* The 'history' setting set to 1 or more (sorry!)
+"* Vim 7.4+
+"
+"
 "## Bugs
 "
 "* Really long / complex searches might not work. The gn function used by this plugin tends to sometimes select only the first char on those, and these situations are where the plugin also fails.
@@ -97,13 +103,13 @@ inoremap <silent> <Plug>EasyReplaceInitiate <c-c><c-c>:call easyreplace#EasyRepl
 nnoremap <silent> <Plug>EasyReplaceInitiate <c-c><c-c>:call easyreplace#EasyReplaceInitiate(histget(":", -1))<cr>
 cnoremap <silent> <Plug>EasyReplaceInitiate <c-c>:call easyreplace#EasyReplaceInitiate(histget(":", -1))<cr>
 
-nnoremap <silent> <Plug>EasyReplaceDo :<c-u>call easyreplace#EasyReplaceDo(1)<cr>
+nnoremap <silent> <Plug>EasyReplaceDo :call easyreplace#EasyReplaceDo(1)<cr>
 
-nnoremap <silent> <Plug>EasyReplaceInPlace :<c-u>call easyreplace#EasyReplaceDo(0)<cr>
+nnoremap <silent> <Plug>EasyReplaceInPlace :call easyreplace#EasyReplaceDo(0)<cr>
 
-nnoremap <silent> <Plug>EasyReplaceToggleUsePrevious :<c-u>call easyreplace#EasyReplaceToggleUsePrevious()<cr>
+nnoremap <silent> <Plug>EasyReplaceToggleUsePrevious :call easyreplace#EasyReplaceToggleUsePrevious()<cr>
 
-nnoremap <silent> <Plug>EasyReplaceBackwards :<c-u>call easyreplace#EasyReplaceDoBackwards()<cr>
+nnoremap <silent> <Plug>EasyReplaceBackwards :call easyreplace#EasyReplaceDoBackwards()<cr>
 
 xnoremap <silent> <Plug>EasyReplaceArea :<c-u>call easyreplace#SubstituteArea()<cr>
 

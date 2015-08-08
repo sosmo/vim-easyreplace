@@ -390,7 +390,7 @@ fun! easyreplace#EasyReplaceInitiate(init_cmd)
 
 	let parts = easyreplace#ParseSubstitution(a:init_cmd)
 	if len(parts) <= 0
-		echo 'easyreplace: type a proper substitution command before initiating'
+		echo 'easyreplace: Type a proper substitution command before initiating.'
 		return
 	endif
 
